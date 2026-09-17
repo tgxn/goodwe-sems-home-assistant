@@ -5,7 +5,6 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable
 from typing import Any, Literal
 
 import requests
@@ -16,8 +15,9 @@ from .const import redact_for_log
 
 _LOGGER = logging.getLogger(__name__)
 
-OLD_LOGIN_URL = "https://www.semsportal.com/api/v3/Common/CrossLogin"
-NEW_LOGIN_URL = "https://semsplus.goodwe.com/web/sems/sems-user/api/v1/auth/cross-login"
+NEW_LOGIN_URL = (
+    "https://au-semsplus.goodwe.com/web/sems/sems-user/api/v1/auth/cross-login"
+)
 _GetPowerStationIdByOwnerURLPart = "/PowerStation/GetPowerStationIdByOwner"
 _PowerStationURLPart = "/v3/PowerStation/GetMonitorDetailByPowerstationId"
 _PowerControlURLPart = "/PowerStation/SaveRemoteControlInverter"
@@ -45,11 +45,10 @@ _NewSEMSPlusWebLoginHeaders = {
 }
 
 
-_NewLoginFallbackApi = "https://eu-gateway.semsportal.com/web/sems"
-_LegacyApiFallback = "https://eu.semsportal.com/api"
+_NewLoginFallbackApi = "https://au-gateway.semsportal.com/web/sems"
+_PowerStationApiFallback = "https://au.semsportal.com/api"
 
-type LoginMode = Literal["new", "legacy", "web"]
-type LoginHandler = Callable[[str, str], dict[str, Any] | None]
+type LoginMode = Literal["new", "web"]
 
 
 class SemsApi:
@@ -62,7 +61,6 @@ class SemsApi:
         self._password = password
         self._token: dict[str, Any] | None = None
         self._web_token: dict[str, Any] | None = None  # Used for SEMS+ web APIs
-        self._preferred_login_mode: LoginMode | None = None
 
     def test_authentication(self) -> bool:
         """Test if we can authenticate with the host."""
@@ -222,10 +220,10 @@ class SemsApi:
         _LOGGER.debug(
             "SEMS - Rewriting API base from %s to fallback %s for %s",
             api_base,
-            _LegacyApiFallback,
+            _PowerStationApiFallback,
             url_part,
         )
-        return _LegacyApiFallback
+        return _PowerStationApiFallback
 
     def _get_authenticated_request_context(
         self,
@@ -296,20 +294,6 @@ class SemsApi:
         ).hexdigest()
         sig = f"{digest}@{epoch_ms}"
         return base64.b64encode(sig.encode()).decode()
-
-    def _get_login_mode_order(self) -> list[LoginMode]:
-        """Return login modes in preferred order."""
-        login_modes: list[LoginMode] = ["new", "legacy"]
-        if self._preferred_login_mode in login_modes:
-            login_modes.remove(self._preferred_login_mode)
-            login_modes.insert(0, self._preferred_login_mode)
-        return login_modes
-
-    def _login_handler_for_mode(self, login_mode: LoginMode) -> LoginHandler:
-        """Return the login handler for a given mode."""
-        if login_mode == "legacy":
-            return self._get_legacy_login_token
-        return self._get_new_login_token
 
     def _resolve_login_api_url(
         self,
@@ -402,27 +386,7 @@ class SemsApi:
             redact_for_log(token_dict),
         )
 
-        if login_mode != "web":
-            self._preferred_login_mode = login_mode
-
         return token_dict
-
-    def _get_legacy_login_token(
-        self, userName: str, password: str
-    ) -> dict[str, Any] | None:
-        """Get a token from the legacy SEMS login endpoint."""
-        _LOGGER.debug("SEMS - Trying legacy login")
-        login_data = json.dumps({"account": userName, "pwd": password})
-        json_response = self._make_http_request(
-            OLD_LOGIN_URL,
-            _DefaultHeaders,
-            data=login_data,
-            operation_name="legacy login API call",
-            validate_code=False,
-        )
-        return self._extract_login_token(
-            json_response, "legacy", "legacy login API call"
-        )
 
     def _get_new_login_token(
         self, userName: str, password: str, is_web: bool = False
@@ -462,28 +426,18 @@ class SemsApi:
         )
 
     def getLoginToken(self, userName: str, password: str) -> dict[str, Any] | None:
-        """Get the login token for the SEMS API."""
-        tried_login_modes: list[LoginMode] = []
+        """Get a login token from the Australian SEMS+ API."""
         try:
-            for login_mode in self._get_login_mode_order():
-                tried_login_modes.append(login_mode)
-                token = self._login_handler_for_mode(login_mode)(userName, password)
+            token = self._get_new_login_token(userName, password)
+            if token is not None:
+                return token
 
-                if token is not None:
-                    # Keep preferred mode in sync even when login helpers are mocked in tests.
-                    self._preferred_login_mode = login_mode
-                    return token
-
-            _LOGGER.error(
-                "Unable to authenticate with SEMS API; tried authentication methods: %s",
-                ", ".join(tried_login_modes),
-            )
+            _LOGGER.error("Unable to authenticate with Australian SEMS+ API")
             return None
 
         except (requests.RequestException, ValueError, KeyError) as exception:
             _LOGGER.error(
-                "Unable to fetch login token from SEMS API using %s authentication methods: %s",
-                ", ".join(tried_login_modes),
+                "Unable to fetch login token from Australian SEMS+ API: %s",
                 exception,
             )
             return None
