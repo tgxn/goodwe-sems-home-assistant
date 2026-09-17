@@ -1,65 +1,65 @@
-# GoodWe SEMS API integration for Home Assistant
+# GoodWe SEMS Australia for Home Assistant
 
-[![Paypal-shield]](https://paypal.me/timsoethout)
-<a href="https://www.buymeacoffee.com/TimSoethout" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="20"></a>
-<a href="https://github.com/sponsors/timsoethout"><img alt="Sponsor" src="https://img.shields.io/badge/sponsor-30363D?&logo=GitHub-Sponsors&logoColor=#white" height="20"/></a>
+A Home Assistant custom integration for Australian GoodWe accounts hosted on
+[SEMS+ Australia](https://au-semsplus.goodwe.com/).
 
-Integration for Home Assistant that retrieves PV data from GoodWe SEMS API.
+> [!IMPORTANT]
+> This is an Australia-only fork of
+> [TimSoethout/goodwe-sems-home-assistant](https://github.com/TimSoethout/goodwe-sems-home-assistant).
+> It uses the Australian SEMS+ authentication and API services. Accounts hosted
+> in other regions are not supported; use the upstream integration instead.
 
-![GitHub Repo stars](https://img.shields.io/github/stars/TimSoethout/goodwe-sems-home-assistant)
-[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/TimSoethout/goodwe-sems-home-assistant/total)](https://tooomm.github.io/github-release-stats/?username=TimSoethout&repository=goodwe-sems-home-assistant)
-[![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/TimSoethout/goodwe-sems-home-assistant/latest/total)](https://tooomm.github.io/github-release-stats/?username=TimSoethout&repository=goodwe-sems-home-assistant)
-[![Active Installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=active%20installs&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.sems.total)](https://analytics.home-assistant.io/)
+## Features
 
-## Setup
+- Imports GoodWe power stations and inverters into Home Assistant.
+- Provides generation, consumption, grid, battery, energy, and inverter sensors
+  when those values are available from SEMS+.
+- Provides controls for supported inverter charging settings.
+- Polls the SEMS+ cloud API once per minute by default.
 
-### Easiest install method via HACS
+This integration depends on undocumented GoodWe cloud APIs. GoodWe may change
+them without notice, and some entities may not be available for every inverter.
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
+## Installation
 
-The repository folder structure is compatible with [HACS](https://hacs.xyz) and is included by default in HACS.
+### HACS
 
-Install HACS via: https://hacs.xyz/docs/installation/manual.
-Then search for "SEMS" in the Integrations tab (under Community). Click `HACS` > `Integrations` > `Explore and Download Repositories` > search for `SEMS` > click the result > `Download`.
+This fork is not included in the default HACS repository list. Add it as a
+custom repository:
 
-### Manual Setup
+1. Open HACS in Home Assistant.
+2. Select **Integrations**, open the menu, and choose **Custom repositories**.
+3. Enter `https://github.com/tgxn/goodwe-sems-home-assistant` and select the
+   **Integration** category.
+4. Select **GoodWe SEMS Australia**, download it, and restart Home Assistant.
 
-Crude sensor for Home Assistant that scrapes from GoodWe SEMS portal. Copy all the files in `custom_components/sems/` to `custom_components/sems/` your Home Assistant config dir.
+### Manual
 
-## Configure integration
+Copy `custom_components/sems` from this repository into the
+`custom_components` directory in your Home Assistant configuration, then
+restart Home Assistant.
 
-In the home assistant GUI, go to `Configuration` > `Integrations` and click the `Add Integration` button. Search for `GoodWe SEMS API`.
+## Configuration
 
-Log in with your Goodwe SEMS (Plus) credentials and it should find your inverters.
+1. In Home Assistant, go to **Settings > Devices & services**.
+2. Select **Add integration** and search for **GoodWe SEMS Australia**.
+3. Sign in with the credentials used at
+   [SEMS+ Australia](https://au-semsplus.goodwe.com/).
 
-### Optional: control the invertor power output via the "switch" entity
+The integration discovers the first power station associated with the account.
+A read-only visitor account is recommended when inverter controls are not
+needed.
 
-It is possible to temporarily pause the energy production via "downtime" functionality available on the invertor. This is exposed as a switch and can be used in your own automations.
+## Inverter Controls
 
-Please note that it is using an undocumented API and can take a few minutes for the invertor to pick up the change. It takes approx 60 seconds to start again when the invertor is in a downtime mode.
+Control entities use undocumented SEMS+ endpoints. Commands may take several
+minutes to reach an inverter. Only enable and use these controls if you
+understand their effect on your installation.
 
-### Recommended: use visitor account if you do not need to control the inverter
+## Troubleshooting
 
-In case you are only reading the inverter stats, you can use a Visitor (read-only) account.
-
-Create via the official app, or via the web portal:
-Login to www.semsportal.com, go to https://semsportal.com/powerstation/stationInfonew. Create a new visitor account.
-Login to the visitor account once to accept the EULA. Now you should be able to use it in this component.
-
-## Screenies
-
-![Detail window](images/sems-details.webp)
-
-![Add as Integration](images/search-integration.webp)
-
-![Integration configuration flow](images/integration-flow.webp)
-
-## Debug info
-
-Enable debugging in the GUI, by going to the integration, and selecting "Enable Debug Logging" in the top right corner. (I'm actually unsure if this really enabled debug level logging for this integration. See below on how to enable it.)
-[https://www.home-assistant.io/docs/configuration/troubleshooting/#enabling-debug-logging](See HA documentation for more info.) 
-
-Or add the last line in `configuration.yaml` in the relevant part of `logger`:
+Enable debug logging from the integration page in Home Assistant, reproduce the
+problem, then disable debug logging to download the log file. You can also add:
 
 ```yaml
 logger:
@@ -68,44 +68,40 @@ logger:
     custom_components.sems: debug
 ```
 
-Then share the relevant log lines.
-See https://www.home-assistant.io/integrations/system_log/ and https://my.home-assistant.io/redirect/logs .
-Click `...` > `Show full logs`.
+SEMS+ can respond slowly or temporarily reject requests. The integration will
+retry during the next update cycle.
 
-## Notes
+When reporting an API problem, include debug logs and, when possible, a
+redacted HAR captured from the Australian SEMS+ website. Remove passwords,
+cookies, authorization headers, tokens, email addresses, station IDs, and
+inverter serial numbers before sharing it.
 
-* Sometimes the SEMS API is a bit slow, so time-out messages may occur in the log as `[ERROR]`. The component should continue to work normally and try fetch again the next minute.
+## Screenshots
 
-## Development setup
+![SEMS integration details](images/sems-details.webp)
 
-- Setup HA development environment using https://developers.home-assistant.io/docs/development_environment
-- clone this repo in config directory:
-  - `cd core/config`
-  - `git clone git@github.com:TimSoethout/goodwe-sems-home-assistant.git`
-- go to terminal in remote VSCode environment
-- `cd core/config/custom_components`
-- `ln -s ../goodwe-sems-home-assistant/custom_components/sems sems`
+![Finding the integration](images/search-integration.webp)
 
-## Linting
+![Integration configuration](images/integration-flow.webp)
 
-Run the same lint checks as the CI workflow:
+## Development
+
+Install the test dependencies and run the checks from the repository root:
 
 ```bash
+python -m pip install -r requirements.test.txt
+python -m pytest tests/ -v
 ruff check custom_components/
 ruff format --check custom_components/
 mypy custom_components/ --ignore-missing-imports --python-version 3.13
 ```
 
-To fix lint issues locally:
-
-```bash
-ruff check --fix custom_components/
-ruff format custom_components/
-```
-
 ## Credits
 
-Inspired by https://github.com/Sprk-nl/goodwe_sems_portal_scraper and https://github.com/bouwew/sems2mqtt .
-Also supported by generous contributions by various helpful community members.
+This project is an Australian-region fork of
+[TimSoethout/goodwe-sems-home-assistant](https://github.com/TimSoethout/goodwe-sems-home-assistant).
+The upstream project was inspired by
+[Sprk-nl/goodwe_sems_portal_scraper](https://github.com/Sprk-nl/goodwe_sems_portal_scraper)
+and [bouwew/sems2mqtt](https://github.com/bouwew/sems2mqtt).
 
-[Paypal-shield]: https://img.shields.io/badge/donate-paypal-blue.svg?style=flat-square&colorA=273133&colorB=b008bb "Paypal"
+This project is not affiliated with or endorsed by GoodWe.

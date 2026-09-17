@@ -24,12 +24,15 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Versions (please complete the following information):**
- - HA version: [e.g. 2015.10.0]
- - SEMS API component versions: [7.4.0]
+ - Home Assistant version:
+ - GoodWe SEMS Australia version:
 
 **Debug log messages**
-See https://github.com/TimSoethout/goodwe-sems-home-assistant?tab=readme-ov-file#debug-info
-Or enable debug logging in Integration settings. Stop debugging again to download logs.
+See https://github.com/tgxn/goodwe-sems-home-assistant#troubleshooting.
+Enable debug logging in the integration settings, reproduce the problem, then
+stop debugging to download the logs. Remove credentials, tokens, email
+addresses, station IDs, and inverter serial numbers before attaching logs or a
+HAR file.
 
 **Additional context**
 Add any other context about the problem here.
