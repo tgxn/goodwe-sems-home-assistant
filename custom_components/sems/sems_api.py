@@ -11,7 +11,7 @@ import requests
 from homeassistant import exceptions
 from homeassistant.core import HomeAssistant
 
-from .const import redact_for_log
+from .const import redact_for_log, redact_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -339,8 +339,8 @@ class SemsApi:
 
         code = json_response.get("code")
         if code not in _SuccessCodes:
-            _LOGGER.debug(
-                "SEMS %s login failed during %s with code %s, msg=%s, description=%s, api=%s, data_type=%s",
+            _LOGGER.warning(
+                "SEMS %s login rejected during %s: code=%s msg=%s description=%s api=%s data_type=%s response=%s",
                 login_mode,
                 operation_name,
                 code,
@@ -348,6 +348,7 @@ class SemsApi:
                 json_response.get("description"),
                 json_response.get("api"),
                 type(json_response.get("data")).__name__,
+                redact_for_log(json_response),
             )
             return None
 
@@ -427,6 +428,11 @@ class SemsApi:
 
     def getLoginToken(self, userName: str, password: str) -> dict[str, Any] | None:
         """Get a login token from the Australian SEMS+ API."""
+        _LOGGER.debug(
+            "SEMS+ authentication attempt: account=%s endpoint=%s",
+            redact_value(userName),
+            NEW_LOGIN_URL,
+        )
         try:
             token = self._get_new_login_token(userName, password)
             if token is not None:

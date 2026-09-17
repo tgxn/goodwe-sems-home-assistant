@@ -197,13 +197,20 @@ class TestSemsApi:
             )
 
     @patch.object(SemsApi, "_make_http_request")
-    def test_get_login_token_failure(self, mock_http_request):
+    def test_get_login_token_failure(self, mock_http_request, caplog):
         """Test failed login token retrieval."""
-        mock_http_request.return_value = None
+        mock_http_request.return_value = {
+            "code": "AUTH_FAILED",
+            "msg": "Invalid credentials",
+            "description": "The account or password is incorrect",
+            "data": None,
+        }
 
         result = self.api.getLoginToken("test_user", "test_pass")
 
         assert result is None
+        assert "AUTH_FAILED" in caplog.text
+        assert "Invalid credentials" in caplog.text
 
     @patch.object(SemsApi, "_make_http_request")
     def test_get_login_token_exception(self, mock_http_request):
