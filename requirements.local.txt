@@ -1,0 +1,4 @@
+# Dependencies for local SEMS API testing
+requests>=2.31.0
+python-dotenv>=1.0.0
+homeassistant>=2026.3.0

@@ -245,9 +245,7 @@ class SemsApi:
                 renewToken,
             )
             if is_web:
-                self._web_token = self._get_new_login_token(
-                    self._username, self._password, is_web=True
-                )
+                self._web_token = self._get_new_login_token(self._username, self._password)
                 token = self._web_token
             else:
                 self._token = self.getLoginToken(self._username, self._password)
@@ -390,12 +388,12 @@ class SemsApi:
         return token_dict
 
     def _get_new_login_token(
-        self, userName: str, password: str, is_web: bool = False
+        self, userName: str, password: str
     ) -> dict[str, Any] | None:
         """Get a token from the SEMS+ login endpoint."""
-        login_mode: LoginMode = "web" if is_web else "new"
+        login_mode: LoginMode = "web"
         operation_name = (
-            "SEMS+ Web login API call" if is_web else "SEMS+ login API call"
+            "SEMS+ Web login API call"
         )
         _LOGGER.debug("SEMS - Trying %s", operation_name)
         login_data = {
@@ -406,11 +404,11 @@ class SemsApi:
             "isLocal": False,
         }
         headers = _NewLoginHeaders
-        if is_web:
-            headers = {
-                **_NewSEMSPlusWebLoginHeaders,
-                "X-Signature": self._generate_signature({}),
-            }
+
+        headers = {
+            **_NewSEMSPlusWebLoginHeaders,
+            "X-Signature": self._generate_signature({}),
+        }
 
         json_response = self._make_http_request(
             NEW_LOGIN_URL,

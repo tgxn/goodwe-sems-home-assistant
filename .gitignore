@@ -9,3 +9,8 @@ coverage.xml
 
 .mypy_cache
 .ruff_cache
+
+logs/
+.env
+venv/
+__pycache__/
