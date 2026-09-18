@@ -1,6 +1,6 @@
 """Tests for SEMS device helpers."""
 
-from custom_components.sems.device import device_info_for_inverter
+from custom_components.sems_au.device import device_info_for_inverter
 
 
 def test_device_info_sw_version_is_string_for_numeric_firmware() -> None:

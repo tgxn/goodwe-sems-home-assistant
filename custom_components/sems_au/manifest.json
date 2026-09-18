@@ -1,5 +1,5 @@
 {
-  "domain": "sems",
+  "domain": "sems-au",
   "name": "GoodWe SEMS (AU)",
   "codeowners": [
     "@tgxn"
@@ -9,7 +9,7 @@
   "documentation": "https://github.com/tgxn/goodwe-sems-home-assistant",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/tgxn/goodwe-sems-home-assistant/issues",
-  "loggers": ["custom_components.sems"],
+  "loggers": ["custom_components.sems_au"],
   "requirements": [],
   "version": "10.6.1"
 }

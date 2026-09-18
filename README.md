@@ -31,7 +31,7 @@ custom repository:
 2. Select **Integrations**, open the menu, and choose **Custom repositories**.
 3. Enter `https://github.com/tgxn/goodwe-sems-home-assistant` and select the
    **Integration** category.
-4. Select **GoodWe SEMS Australia**, download it, and restart Home Assistant.
+4. Select **GoodWe SEMS (AU))**, download it, and restart Home Assistant.
 
 ### Manual
 
