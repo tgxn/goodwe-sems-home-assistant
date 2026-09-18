@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from custom_components.sems.const import redact_for_log
-from custom_components.sems.sems_api import (
+from custom_components.sems_au.const import redact_for_log
+from custom_components.sems_au.sems_api import (
     NEW_LOGIN_URL,
     OutOfRetries,
     SemsApi,
@@ -37,7 +37,7 @@ class TestSemsApi:
         assert self.api._password == self.password
         assert self.api._token is None
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_make_http_request_success(self, mock_request):
         """Test successful HTTP request."""
         # Mock successful response
@@ -65,7 +65,7 @@ class TestSemsApi:
             timeout=30,
         )
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_make_http_request_validation_failure(self, mock_request):
         """Test HTTP request with validation failure."""
         # Mock response with error code
@@ -85,7 +85,7 @@ class TestSemsApi:
 
         assert result is None
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_make_http_request_no_validation(self, mock_request):
         """Test HTTP request without validation."""
         # Mock response with error code but validation disabled
@@ -105,7 +105,7 @@ class TestSemsApi:
 
         assert result == {"code": 1001, "msg": "Error"}
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_make_http_request_network_error(self, mock_request):
         """Test HTTP request with network error."""
         mock_request.side_effect = requests.ConnectionError("Network error")
@@ -178,7 +178,7 @@ class TestSemsApi:
             with pytest.raises(SemsRateLimitedError):
                 self.api.getLoginToken("test_user", "test_pass")
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_make_http_request_rate_limit_raises(self, mock_request):
         """Test HTTP request raises SemsRateLimitedError on rate-limit code."""
         mock_response = Mock()
@@ -440,7 +440,7 @@ class TestSemsApi:
         }
         mock_http_request.return_value = mock_response
 
-        result = self.api._get_new_login_token("test_user", "test_pass", is_web=True)
+        result = self.api._get_new_login_token("test_user", "test_pass")
 
         expected_token = {
             "uid": "test-uid",
@@ -452,7 +452,7 @@ class TestSemsApi:
         assert result == expected_token
         mock_http_request.assert_called_once()
 
-    @patch("custom_components.sems.sems_api.time.time")
+    @patch("custom_components.sems_au.sems_api.time.time")
     def test_generate_signature(self, mock_time):
         """Test SEMS+ web signature encoding."""
         mock_time.return_value = 1234567890
@@ -494,7 +494,7 @@ class TestSemsApi:
 
         assert result == {"result": "success"}
         assert self.api._web_token == mock_token
-        mock_login.assert_called_once_with("test_user", "test_password", is_web=True)
+        mock_login.assert_called_once_with("test_user", "test_password")
         mock_http_request.assert_called_once()
 
     @patch.object(SemsApi, "getLoginToken")
@@ -593,7 +593,7 @@ class TestSemsApi:
         assert mock_http_request.call_count == 2
         mock_login.assert_called_once()
 
-    @patch("custom_components.sems.sems_api.requests.request")
+    @patch("custom_components.sems_au.sems_api.requests.request")
     def test_immediate_charging_states_read_fail_does_not_retry(self, mock_request):
         """Reproduce read_fail responses from the immediate charging endpoint."""
         self.api._web_token = {

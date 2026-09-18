@@ -10,9 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.sems import SemsData
-from custom_components.sems.const import CONF_STATION_ID, DOMAIN
-from custom_components.sems.sensor import sensor_options_for_data
+from custom_components.sems_au import SemsData
+from custom_components.sems_au.const import CONF_STATION_ID, DOMAIN
+from custom_components.sems_au.sensor import sensor_options_for_data
 
 from .fixtures import (
     MOCK_GET_DATA_ACTUAL_JSON,
@@ -26,13 +26,13 @@ MOCK_POWER_STATION_ID = "12345678-1234-5678-9abc-123456789abc"
 def _mock_no_battery_api(data: dict):
     """Mock coordinator API calls for payloads without battery controls."""
     with (
-        patch("custom_components.sems.sems_api.SemsApi.getData", return_value=data),
+        patch("custom_components.sems_au.sems_api.SemsApi.getData", return_value=data),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
+            "custom_components.sems_au.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
             return_value=[],
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getBatteryGeneralFunctions",
+            "custom_components.sems_au.sems_api.SemsApi.getBatteryGeneralFunctions",
             return_value={},
         ),
     ):

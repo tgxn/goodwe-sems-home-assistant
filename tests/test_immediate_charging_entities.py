@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.sems.const import CONF_STATION_ID, DOMAIN
+from custom_components.sems_au.const import CONF_STATION_ID, DOMAIN
 from tests.fixtures import MOCK_GET_DATA_RESULT_MINIMAL
 
 POWER_STATION_ID = "12345678-1234-5678-9abc-123456789abc"
@@ -79,19 +79,19 @@ async def _setup_entry(
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.getData",
+            "custom_components.sems_au.sems_api.SemsApi.getData",
             return_value=get_data,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
+            "custom_components.sems_au.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
             return_value=cabinets,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getBatteryGeneralFunctions",
+            "custom_components.sems_au.sems_api.SemsApi.getBatteryGeneralFunctions",
             return_value=functions,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getBatteryImmediateChargingStates",
+            "custom_components.sems_au.sems_api.SemsApi.getBatteryImmediateChargingStates",
             return_value=STATES,
         ),
     ):
@@ -171,19 +171,19 @@ async def test_entities_are_not_added_after_discovery(hass: HomeAssistant) -> No
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.getData",
+            "custom_components.sems_au.sems_api.SemsApi.getData",
             return_value=MOCK_GET_DATA_RESULT_MINIMAL,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
+            "custom_components.sems_au.sems_api.SemsApi.getEnergyStorageIntegratedCabinets",
             return_value=[],
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getBatteryGeneralFunctions",
+            "custom_components.sems_au.sems_api.SemsApi.getBatteryGeneralFunctions",
             return_value=FUNCTIONS,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getBatteryImmediateChargingStates",
+            "custom_components.sems_au.sems_api.SemsApi.getBatteryImmediateChargingStates",
             return_value=STATES,
         ),
     ):

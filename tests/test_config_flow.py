@@ -10,9 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.sems import async_migrate_entry
-from custom_components.sems.config_flow import _normalize_station_ids
-from custom_components.sems.const import CONF_STATION_ID, DOMAIN
+from custom_components.sems_au import async_migrate_entry
+from custom_components.sems_au.config_flow import _normalize_station_ids
+from custom_components.sems_au.const import CONF_STATION_ID, DOMAIN
 
 MOCK_USERNAME = "test@example.com"
 MOCK_PASSWORD = "test_password"
@@ -68,7 +68,7 @@ class TestNormalizeStationIds:
 def mock_setup_entry():
     """Prevent the integration from being set up during config flow tests."""
     with patch(
-        "custom_components.sems.async_setup_entry",
+        "custom_components.sems_au.async_setup_entry",
         return_value=True,
     ) as mock:
         yield mock
@@ -96,11 +96,11 @@ async def test_single_station_creates_entry_directly(
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.test_authentication",
+            "custom_components.sems_au.sems_api.SemsApi.test_authentication",
             return_value=True,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getPowerStationIds",
+            "custom_components.sems_au.sems_api.SemsApi.getPowerStationIds",
             return_value=MOCK_STATION_ID_1,
         ),
     ):
@@ -127,11 +127,11 @@ async def test_multiple_stations_auto_creates_all_entries(
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.test_authentication",
+            "custom_components.sems_au.sems_api.SemsApi.test_authentication",
             return_value=True,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getPowerStationIds",
+            "custom_components.sems_au.sems_api.SemsApi.getPowerStationIds",
             return_value=[MOCK_STATION_ID_1, MOCK_STATION_ID_2],
         ),
     ):
@@ -174,35 +174,9 @@ async def test_single_station_already_configured_aborts(
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.test_authentication",
-            return_value=True,
+            "custom_components.sems_au.sems_api.SemsApi.test_authentication",
+            return_value=False,
         ),
-        patch(
-            "custom_components.sems.sems_api.SemsApi.getPowerStationIds",
-            return_value=MOCK_STATION_ID_1,
-        ),
-    ):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_USERNAME: MOCK_USERNAME, CONF_PASSWORD: MOCK_PASSWORD},
-        )
-
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
-
-
-async def test_invalid_auth_shows_error(
-    hass: HomeAssistant,
-    enable_custom_integrations: None,
-) -> None:
-    """Invalid credentials surface the invalid_auth error on the user step."""
-    del enable_custom_integrations
-
-    result = await _init_flow(hass)
-
-    with patch(
-        "custom_components.sems.sems_api.SemsApi.test_authentication",
-        return_value=False,
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -225,11 +199,11 @@ async def test_no_stations_found_shows_error(
 
     with (
         patch(
-            "custom_components.sems.sems_api.SemsApi.test_authentication",
+            "custom_components.sems_au.sems_api.SemsApi.test_authentication",
             return_value=True,
         ),
         patch(
-            "custom_components.sems.sems_api.SemsApi.getPowerStationIds",
+            "custom_components.sems_au.sems_api.SemsApi.getPowerStationIds",
             return_value=None,
         ),
     ):

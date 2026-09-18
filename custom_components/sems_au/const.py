@@ -9,7 +9,7 @@ from typing import Any
 # import voluptuous as vol
 # from homeassistant.const import CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
 
-DOMAIN = "sems"
+DOMAIN = "sems-au"
 
 PLATFORMS = ["number", "sensor", "switch"]
 
