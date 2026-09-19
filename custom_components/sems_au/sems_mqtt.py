@@ -264,7 +264,7 @@ class SemsMqttListener:
                     self._connection_failures = 0
                     self._is_connected = True
                     self._connection_state = "connected"
-                    await client.subscribe(self._topic)
+                    await client.subscribe(self._topic, qos=0)
                     _LOGGER.info(
                         "✓ Connected to SEMS live data (WebSocket MQTT) and subscribed to %s",
                         redact_for_log(self._topic),
