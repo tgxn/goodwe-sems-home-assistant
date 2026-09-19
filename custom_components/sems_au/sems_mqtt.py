@@ -214,7 +214,12 @@ class SemsMqttListener:
                     self._api.getMqttConfig
                 )
                 config = SemsMqttConfig.from_api(config_data, self._region)
-                tls_context = ssl.create_default_context() if config.use_tls else None
+                if config.use_tls:
+                    tls_context = await self._hass.async_add_executor_job(
+                        ssl.create_default_context
+                    )
+                else:
+                    tls_context = None
 
                 async with aiomqtt.Client(
                     hostname=config.hostname,
