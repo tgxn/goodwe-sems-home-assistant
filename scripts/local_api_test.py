@@ -33,6 +33,100 @@ from custom_components.sems_au.sems_mqtt import (  # noqa: E402
 _RECONNECT_DELAY = 5
 
 
+class MqttPacketCapture:
+    """Capture MQTT packets for comparison with browser traffic."""
+
+    def __init__(self):
+        self.sent_packets = []
+        self.received_packets = []
+
+    def log_sent(self, label: str, data: bytes):
+        """Log a packet we're sending."""
+        self.sent_packets.append(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "label": label,
+                "hex": data.hex(),
+                "base64": base64.b64encode(data).decode("ascii"),
+                "length": len(data),
+            }
+        )
+        logging.debug("SENT [%s] %d bytes: %s", label, len(data), data.hex()[:80])
+
+    def log_received(self, label: str, data: bytes):
+        """Log a packet we received."""
+        self.received_packets.append(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "label": label,
+                "hex": data.hex(),
+                "base64": base64.b64encode(data).decode("ascii"),
+                "length": len(data),
+            }
+        )
+        logging.debug("RECV [%s] %d bytes: %s", label, len(data), data.hex()[:80])
+
+    def save_to_file(self, output_dir: Path):
+        """Save packet capture to JSON files for comparison."""
+        if self.sent_packets or self.received_packets:
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+            if self.sent_packets:
+                sent_file = output_dir / f"{timestamp}_mqtt_sent_packets.json"
+                sent_file.write_text(
+                    json.dumps(self.sent_packets, indent=2), encoding="utf-8"
+                )
+                logging.info("Sent packets: %s", sent_file)
+
+            if self.received_packets:
+                recv_file = output_dir / f"{timestamp}_mqtt_received_packets.json"
+                recv_file.write_text(
+                    json.dumps(self.received_packets, indent=2), encoding="utf-8"
+                )
+                logging.info("Received packets: %s", recv_file)
+
+
+class _ColoredFormatter(logging.Formatter):
+    """Custom formatter with colored output for console."""
+
+    # ANSI color codes
+    COLORS = {
+        "DEBUG": "\033[90m",  # Dark grey
+        "INFO": "\033[0m",  # Default
+        "WARNING": "\033[93m",  # Bright yellow
+        "ERROR": "\033[91m",  # Bright red
+        "CRITICAL": "\033[41m\033[37m",  # Red background with white text
+    }
+    RESET = "\033[0m"
+    ITALIC = "\033[3m"
+    BOLD = "\033[1m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format a log record with colors."""
+        levelname = record.levelname
+        color = self.COLORS.get(levelname, self.RESET)
+
+        # Add styling
+        if levelname == "DEBUG":
+            # Grey italic for debug
+            formatted_level = f"{color}{self.ITALIC}{levelname}{self.RESET}"
+            formatted_msg = f"{color}{self.ITALIC}{record.getMessage()}{self.RESET}"
+        elif levelname in ("ERROR", "CRITICAL"):
+            # Bold red for errors
+            formatted_level = f"{color}{self.BOLD}{levelname}{self.RESET}"
+            formatted_msg = f"{color}{self.BOLD}{record.getMessage()}{self.RESET}"
+        elif levelname == "WARNING":
+            # Bold yellow for warnings
+            formatted_level = f"{color}{self.BOLD}{levelname}{self.RESET}"
+            formatted_msg = f"{color}{record.getMessage()}{self.RESET}"
+        else:
+            formatted_level = f"{color}{levelname}{self.RESET}"
+            formatted_msg = f"{color}{record.getMessage()}{self.RESET}"
+
+        # Build the formatted output
+        return f"{record.asctime} - {record.name} - {formatted_level} - {formatted_msg}"
+
+
 class MinimalHass:
     """Minimal Home Assistant stub for local API testing."""
 
@@ -48,6 +142,11 @@ def _parse_arguments() -> argparse.Namespace:
         "--duration",
         type=float,
         help="Stop after this many seconds instead of waiting for Ctrl+C",
+    )
+    parser.add_argument(
+        "--api-only",
+        action="store_true",
+        help="Run only API validations (REST snapshots and energy storage data) without MQTT capture",
     )
     return parser.parse_args()
 
@@ -93,12 +192,20 @@ async def _capture_mqtt(
     api: SemsApi,
     station_id: str,
     output_file: Path,
+    log_dir: Path,
     duration: float | None,
 ) -> int:
     """Stream MQTT messages to the console and a JSON Lines capture file."""
+    import logging as stdlib_logging
+
+    # Enable aiomqtt debug logging to see raw wire protocol
+    aiomqtt_logger = stdlib_logging.getLogger("aiomqtt")
+    aiomqtt_logger.setLevel(stdlib_logging.DEBUG)
+
     topic = f"/goodwe/second-data/station/{station_id}"
     deadline = asyncio.get_running_loop().time() + duration if duration else None
     message_count = 0
+    packet_capture = MqttPacketCapture()
 
     with output_file.open("a", encoding="utf-8") as capture:
         while deadline is None or asyncio.get_running_loop().time() < deadline:
@@ -120,38 +227,134 @@ async def _capture_mqtt(
                     websocket_headers={"Origin": config.websocket_origin},
                     keepalive=60,
                 ) as client:
-                    await client.subscribe(topic)
+                    # Log CONNECT packet details
+                    logging.info("=== MQTT CONNECT (sending to broker) ===")
+                    logging.info("  client_id: %s", config.client_id)
+                    logging.info("  username: %s", "***" if config.username else "NONE")
+                    logging.info("  keepalive: 60s")
+                    logging.info("  protocol: MQTT 3.1.1")
+                    logging.info("  websocket_origin: %s", config.websocket_origin)
+                    logging.info("===")
+
+                    # Capture CONNECT config for packet inspection
+                    connect_info = {
+                        "client_id": config.client_id,
+                        "username_present": bool(config.username),
+                        "password_present": bool(config.password),
+                        "keepalive": 60,
+                        "clean_session": True,
+                        "protocol": "MQTT 3.1.1",
+                    }
+                    packet_capture.log_sent(
+                        "CONNECT", json.dumps(connect_info).encode()
+                    )
+
+                    await client.subscribe(topic, qos=0)
+
+                    # Log SUBSCRIBE packet details
+                    logging.info("=== MQTT SUBSCRIBE (sending to broker) ===")
+                    logging.info("  topic: %s", topic)
+                    logging.info("  qos: 0")
+                    logging.info("===")
+
+                    subscribe_info = {
+                        "topic": topic,
+                        "qos": 0,
+                    }
+                    packet_capture.log_sent(
+                        "SUBSCRIBE", json.dumps(subscribe_info).encode()
+                    )
+
                     logging.info(
                         "Connected to %s:%s and subscribed to %s",
                         config.hostname,
                         config.port,
                         topic,
                     )
+                    logging.debug(
+                        "Broker details: hostname=%s, port=%d, "
+                        "use_tls=%s, websocket_path=%s, client_id=%s",
+                        config.hostname,
+                        config.port,
+                        config.use_tls,
+                        config.websocket_path,
+                        config.client_id,
+                    )
+
+                    logging.info("=== Post-SUBACK: Waiting for device to publish ===")
+                    logging.info("If no messages appear within 10 seconds:")
+                    logging.info("  - Device may only publish to recognized clients")
+                    logging.info("  - Missing PINGREQ/keep-alive after subscription")
+                    logging.info(
+                        "  - Device may require initial publish request from client"
+                    )
+                    logging.info("===")
 
                     async def consume_messages() -> None:
                         nonlocal message_count
                         logging.debug("Starting message consumption loop")
-                        # message_received_time = asyncio.get_running_loop().time()
+                        logging.debug("Waiting for messages on topic: %s", topic)
+                        message_idx = 0
+                        start_time = asyncio.get_running_loop().time()
+                        first_message_timeout = 15  # seconds
+
                         async for message in client.messages:
-                            # message_received_time = asyncio.get_running_loop().time()
-                            record = _capture_record(
-                                str(message.topic), bytes(message.payload)
+                            elapsed = asyncio.get_running_loop().time() - start_time
+
+                            # Log if this is the first message (indicates handshake + device sending)
+                            if message_idx == 0:
+                                logging.info(
+                                    "First MQTT message received after %.1f seconds",
+                                )
+
+                            message_idx += 1
+                            payload_bytes = bytes(message.payload)
+
+                            # Log full packet hex dump for comparison with browser traffic
+                            logging.debug(
+                                "MQTT message %d: topic=%s, length=%d, hex=%s",
+                                message_idx,
+                                str(message.topic),
+                                len(payload_bytes),
+                                payload_bytes[:50].hex(),
                             )
-                            capture.write(
-                                json.dumps(record, ensure_ascii=False, default=str)
-                                + "\n"
-                            )
-                            capture.flush()
-                            message_count += 1
-                            logging.info(
-                                "MQTT message %s topic=%s payload=%s",
-                                message_count,
-                                record["topic"],
-                                json.dumps(
-                                    record["parsed_payload"],
-                                    ensure_ascii=False,
-                                    default=str,
-                                ),
+
+                            try:
+                                record = _capture_record(
+                                    str(message.topic), payload_bytes
+                                )
+                                capture.write(
+                                    json.dumps(record, ensure_ascii=False, default=str)
+                                    + "\n"
+                                )
+                                capture.flush()
+                                message_count += 1
+                                logging.info(
+                                    "MQTT message %s topic=%s payload=%s",
+                                    message_count,
+                                    record["topic"],
+                                    json.dumps(
+                                        record["parsed_payload"],
+                                        ensure_ascii=False,
+                                        default=str,
+                                    ),
+                                )
+                            except Exception as decode_err:
+                                logging.error(
+                                    "Failed to decode MQTT message %d: %s. "
+                                    "Raw bytes (first 100): %r, hex: %s",
+                                    message_idx,
+                                    decode_err,
+                                    payload_bytes[:100],
+                                    payload_bytes[:50].hex(),
+                                    exc_info=False,
+                                )
+
+                        if message_idx == 0:
+                            elapsed = asyncio.get_running_loop().time() - start_time
+                            logging.warning(
+                                "No MQTT messages received after %.1f seconds",
+                                elapsed,
                             )
 
                     if deadline is None:
@@ -189,6 +392,9 @@ async def _capture_mqtt(
                 "or checking the device status via the REST API."
             )
 
+    # Save packet captures for comparison with browser
+    packet_capture.save_to_file(log_dir)
+
     return message_count
 
 
@@ -201,11 +407,21 @@ async def _async_main(args: argparse.Namespace) -> None:
     log_file = log_dir / f"{timestamp}_local_test.log"
     mqtt_file = log_dir / f"{timestamp}_mqtt_messages.jsonl"
 
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+    # Set up logging with colored console output and plain file output
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # File handler: plain format
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
+    logger.addHandler(file_handler)
+
+    # Console handler: colored format
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(_ColoredFormatter())
+    logger.addHandler(console_handler)
 
     username = os.getenv("SEMS_USERNAME")
     password = os.getenv("SEMS_PASSWORD")
@@ -238,13 +454,121 @@ async def _async_main(args: argparse.Namespace) -> None:
     monitoring_file.write_text(json.dumps(monitoring_data, indent=2), encoding="utf-8")
 
     logging.info("Initial REST snapshot: %s", monitoring_file)
-    logging.info("MQTT capture: %s", mqtt_file)
-    logging.info(
-        "Streaming live messages from region %s; press Ctrl+C to stop",
-        DEFAULT_SEMS_REGION,
-    )
-    message_count = await _capture_mqtt(api, station_id, mqtt_file, args.duration)
-    logging.info("Capture complete: %s MQTT messages written", message_count)
+
+    # Capture energy storage and battery data if available
+    inverters = monitoring_data.get("inverter", [])
+    if isinstance(inverters, list):
+        energy_storage_file = log_dir / f"{timestamp}_raw_energy_storage.json"
+        battery_functions_file = log_dir / f"{timestamp}_raw_battery_functions.json"
+        charging_states_file = log_dir / f"{timestamp}_raw_charging_states.json"
+
+        energy_storage_data = {}
+        battery_functions_data = {}
+        charging_states_data = {}
+
+        for inverter in inverters:
+            inverter_full = inverter.get("invert_full", {})
+            serial_number = inverter_full.get("sn")
+            if not serial_number:
+                continue
+
+            logging.info("Fetching energy storage data for inverter %s", serial_number)
+            try:
+                cabinets = await asyncio.to_thread(
+                    api.getEnergyStorageIntegratedCabinets,
+                    station_id,
+                    serial_number,
+                )
+                energy_storage_data[serial_number] = cabinets
+                logging.info(
+                    "  Energy storage cabinets: %s", len(cabinets) if cabinets else 0
+                )
+            except Exception as err:
+                logging.warning(
+                    "  Failed to fetch energy storage for %s: %s",
+                    serial_number,
+                    err,
+                )
+
+            # Fetch battery functions if energy storage exists
+            if energy_storage_data.get(serial_number):
+                for idx, cabinet in enumerate(energy_storage_data[serial_number]):
+                    cabinet_sn = cabinet.get("sn")
+                    if not cabinet_sn:
+                        continue
+                    logging.info(
+                        "Fetching battery functions for cabinet %s (index %d)",
+                        cabinet_sn,
+                        idx,
+                    )
+                    try:
+                        functions = await asyncio.to_thread(
+                            api.getBatteryGeneralFunctions,
+                            cabinet_sn,
+                            idx,
+                        )
+                        battery_functions_data[cabinet_sn] = functions
+                        logging.info("  Battery functions: %s", functions)
+                    except Exception as err:
+                        logging.warning(
+                            "  Failed to fetch battery functions for %s: %s",
+                            cabinet_sn,
+                            err,
+                        )
+
+                    logging.info(
+                        "Fetching immediate charging states for cabinet %s (index %d)",
+                        cabinet_sn,
+                        idx,
+                    )
+                    try:
+                        states = await asyncio.to_thread(
+                            api.getBatteryImmediateChargingStates,
+                            cabinet_sn,
+                            idx,
+                        )
+                        charging_states_data[cabinet_sn] = states
+                        logging.info("  Charging states: %s", states)
+                    except Exception as err:
+                        logging.warning(
+                            "  Failed to fetch charging states for %s: %s",
+                            cabinet_sn,
+                            err,
+                        )
+
+        if energy_storage_data:
+            energy_storage_file.write_text(
+                json.dumps(energy_storage_data, indent=2, default=str),
+                encoding="utf-8",
+            )
+            logging.info("Energy storage snapshot: %s", energy_storage_file)
+
+        if battery_functions_data:
+            battery_functions_file.write_text(
+                json.dumps(battery_functions_data, indent=2, default=str),
+                encoding="utf-8",
+            )
+            logging.info("Battery functions snapshot: %s", battery_functions_file)
+
+        if charging_states_data:
+            charging_states_file.write_text(
+                json.dumps(charging_states_data, indent=2, default=str),
+                encoding="utf-8",
+            )
+            logging.info("Charging states snapshot: %s", charging_states_file)
+
+    if not args.api_only:
+        logging.info("MQTT capture: %s", mqtt_file)
+        logging.info(
+            "Streaming live messages from region %s; press Ctrl+C to stop",
+            DEFAULT_SEMS_REGION,
+        )
+        message_count = await _capture_mqtt(
+            api, station_id, mqtt_file, log_dir, args.duration
+        )
+        logging.info("Capture complete: %s MQTT messages written", message_count)
+    else:
+        logging.info("Skipping MQTT capture (--api-only mode)")
 
 
 def main() -> None:
