@@ -335,9 +335,11 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
         for sn, bats in energy_storage_cabinets.items():
             battery_general_functions[sn] = {}
             for bat in bats:
-                if not isinstance(bat, dict) or bat.get("translateCode") is None:
+                if not isinstance(bat, dict) or not isinstance(
+                    bat.get("translateCode"), str
+                ):
                     continue
-                bat_code = bat.get("translateCode")
+                bat_code = bat["translateCode"]
                 try:
                     result = await self.hass.async_add_executor_job(
                         self.sems_api.getBatteryGeneralFunctions, sn, bat.get("no", 0)
