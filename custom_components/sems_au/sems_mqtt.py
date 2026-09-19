@@ -63,6 +63,10 @@ class SemsMqttConfig:
         ):
             raise ValueError("SEMS MQTT configuration is missing required fields")
 
+        assert isinstance(client_id, str)
+        assert isinstance(username, str)
+        assert isinstance(password, str)
+
         parsed_url = urlparse(region_config.mqtt_broker_url)
         if parsed_url.scheme not in {"ws", "wss"} or not parsed_url.hostname:
             raise ValueError("SEMS MQTT broker URL must use ws:// or wss://")

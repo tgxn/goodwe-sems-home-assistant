@@ -36,9 +36,13 @@ show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
+[[tool.mypy.overrides]]
+module = "homeassistant.*"
+ignore_errors = true
+
 [tool.coverage.run]
 branch = true
-source = ["custom_components/sems"]
+source = ["custom_components/sems_au"]
 
 [tool.coverage.report]
 show_missing = true

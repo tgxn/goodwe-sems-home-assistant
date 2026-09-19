@@ -1,5 +1,5 @@
 {
-  "domain": "sems-au",
+  "domain": "sems_au",
   "name": "GoodWe SEMS (AU)",
   "codeowners": ["@tgxn"],
   "config_flow": true,
