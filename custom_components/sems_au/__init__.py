@@ -304,16 +304,26 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
             return {}
 
         _LOGGER.debug("Getting energy storage integrated cabinets")
-        return {
-            inverter.get("invert_full", {}).get(
-                "sn"
-            ): await self.hass.async_add_executor_job(
-                self.sems_api.getEnergyStorageIntegratedCabinets,
-                self.station_id,
-                inverter.get("invert_full", {}).get("sn"),
-            )
-            for inverter in data_result.get("inverter", {})
-        }
+        cabinets: dict[str, list[dict[str, Any]]] = {}
+        for inverter in data_result.get("inverter", {}):
+            sn = inverter.get("invert_full", {}).get("sn")
+            if not sn:
+                continue
+            try:
+                result = await self.hass.async_add_executor_job(
+                    self.sems_api.getEnergyStorageIntegratedCabinets,
+                    self.station_id,
+                    sn,
+                )
+                cabinets[sn] = result if isinstance(result, list) else []
+            except Exception as err:
+                _LOGGER.debug(
+                    "Unable to fetch energy storage cabinets for %s: %s",
+                    redact_for_log(sn),
+                    err,
+                )
+                cabinets[sn] = []
+        return cabinets
 
     async def _async_get_battery_functions(
         self, energy_storage_cabinets: dict[str, list[dict[str, Any]]]
@@ -321,16 +331,26 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
         """Fetch and retain supported battery functions."""
         if energy_storage_cabinets:
             _LOGGER.debug("Getting battery general functions for each cabinet")
-        battery_general_functions = {
-            sn: {
-                bat.get("translateCode"): await self.hass.async_add_executor_job(
-                    self.sems_api.getBatteryGeneralFunctions, sn, bat.get("no", 0)
-                )
-                for bat in bats
-                if isinstance(bat, dict) and bat.get("translateCode") is not None
-            }
-            for sn, bats in energy_storage_cabinets.items()
-        }
+        battery_general_functions: dict[str, dict[str, dict[str, Any]]] = {}
+        for sn, bats in energy_storage_cabinets.items():
+            battery_general_functions[sn] = {}
+            for bat in bats:
+                if not isinstance(bat, dict) or bat.get("translateCode") is None:
+                    continue
+                bat_code = bat.get("translateCode")
+                try:
+                    result = await self.hass.async_add_executor_job(
+                        self.sems_api.getBatteryGeneralFunctions, sn, bat.get("no", 0)
+                    )
+                    battery_general_functions[sn][bat_code] = result
+                except Exception as err:
+                    _LOGGER.debug(
+                        "Unable to fetch battery functions for %s (battery %s): %s",
+                        redact_for_log(sn),
+                        bat_code,
+                        err,
+                    )
+                    battery_general_functions[sn][bat_code] = {}
 
         batteries: dict[str, dict[str, dict[str, Any]]] = {}
         for sn, bats in battery_general_functions.items():
@@ -378,15 +398,27 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
 
         immediate_charging: dict[str, dict[str, Any]] = {}
         for inverter_sn in batteries:
-            immediate_charging_result = await self.hass.async_add_executor_job(
-                self.sems_api.getBatteryImmediateChargingStates, inverter_sn
-            )
-            state_data = (immediate_charging_result or {}).get("data", {})
-            immediate_charging[inverter_sn] = {
-                "enabled": bool(state_data.get("47545", 0)),
-                "end_charge_soc": state_data.get("47546", 0),
-                "charging_power": state_data.get("47603", 0),
-            }
+            try:
+                immediate_charging_result = await self.hass.async_add_executor_job(
+                    self.sems_api.getBatteryImmediateChargingStates, inverter_sn
+                )
+                state_data = (immediate_charging_result or {}).get("data", {})
+                immediate_charging[inverter_sn] = {
+                    "enabled": bool(state_data.get("47545", 0)),
+                    "end_charge_soc": state_data.get("47546", 0),
+                    "charging_power": state_data.get("47603", 0),
+                }
+            except Exception as err:
+                _LOGGER.debug(
+                    "Unable to fetch immediate charging state for %s: %s",
+                    redact_for_log(inverter_sn),
+                    err,
+                )
+                immediate_charging[inverter_sn] = {
+                    "enabled": False,
+                    "end_charge_soc": 0,
+                    "charging_power": 0,
+                }
 
         return immediate_charging
 

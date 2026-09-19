@@ -16,7 +16,7 @@ PLATFORMS = ["number", "sensor", "switch"]
 CONF_STATION_ID = "powerstation_id"
 CONF_REGION = "region"
 
-DEFAULT_SCAN_INTERVAL = 60  # timedelta(seconds=60)
+DEFAULT_SCAN_INTERVAL = 120  # timedelta(seconds=120) - reduced from 60 to ease API pressure and allow MQTT updates to integrate
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
