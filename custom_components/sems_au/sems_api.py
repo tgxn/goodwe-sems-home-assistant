@@ -134,12 +134,26 @@ class SemsApi:
             # Validate response code if requested
             if validate_code:
                 if response_code not in _SuccessCodes:
-                    _LOGGER.error(
-                        "%s failed with code: %s, message: %s",
-                        operation_name,
-                        response_code,
-                        json_response.get("msg", "Unknown error"),
+                    error_msg = json_response.get("msg", "Unknown error")
+                    # Detect authorization-related errors that need token refresh
+                    is_auth_error = (
+                        str(response_code) == "100002"
+                        or "authorization" in error_msg.lower()
                     )
+                    if is_auth_error:
+                        _LOGGER.warning(
+                            "%s - Authorization failed (code: %s): %s. Will retry with fresh token.",
+                            operation_name,
+                            response_code,
+                            error_msg,
+                        )
+                    else:
+                        _LOGGER.error(
+                            "%s failed with code: %s, message: %s",
+                            operation_name,
+                            response_code,
+                            error_msg,
+                        )
                     return None
 
             return json_response
@@ -465,7 +479,11 @@ class SemsApi:
         """Make a generic API call with token management and retry logic."""
         _LOGGER.debug("SEMS - Making %s", operation_name)
         if maxTokenRetries <= 0:
-            _LOGGER.info("SEMS - Maximum token fetch tries reached, aborting for now")
+            _LOGGER.error(
+                "SEMS - %s failed: Maximum token refresh attempts exceeded. "
+                "Check your SEMS credentials or wait a moment before retrying.",
+                operation_name,
+            )
             raise OutOfRetries
 
         context = self._get_authenticated_request_context(
@@ -491,11 +509,11 @@ class SemsApi:
 
             # _make_http_request already validated the response, so if we get here, it's successful
             if json_response is None:
-                # Response validation failed in _make_http_request
-                _LOGGER.debug(
-                    "%s not successful, retrying with new token, %s retries remaining",
+                # Response validation failed in _make_http_request (likely auth error)
+                _LOGGER.info(
+                    "SEMS - %s encountered an error. Refreshing authentication token and retrying (%s attempts remaining)...",
                     operation_name,
-                    maxTokenRetries,
+                    maxTokenRetries - 1,
                 )
                 return self._make_api_call(
                     url_part,
