@@ -131,9 +131,9 @@ async def _capture_mqtt(
                     async def consume_messages() -> None:
                         nonlocal message_count
                         logging.debug("Starting message consumption loop")
-                        message_received_time = asyncio.get_running_loop().time()
+                        # message_received_time = asyncio.get_running_loop().time()
                         async for message in client.messages:
-                            message_received_time = asyncio.get_running_loop().time()
+                            # message_received_time = asyncio.get_running_loop().time()
                             record = _capture_record(
                                 str(message.topic), bytes(message.payload)
                             )
@@ -176,9 +176,11 @@ async def _capture_mqtt(
                 else:
                     await asyncio.sleep(_RECONNECT_DELAY)
             except Exception as err:
-                logging.error("Unexpected error in MQTT capture: %s", err, exc_info=True)
+                logging.error(
+                    "Unexpected error in MQTT capture: %s", err, exc_info=True
+                )
                 raise
-        
+
         if message_count == 0:
             logging.warning(
                 "No MQTT messages received. This usually means no data is currently being "
