@@ -1,4 +1,4 @@
-# GoodWe SEMS Australia for Home Assistant
+# GoodWe SEMS+ Australia for Home Assistant
 
 A Home Assistant custom integration for Australian GoodWe accounts hosted on
 [SEMS+ Australia](https://au-semsplus.goodwe.com/).
@@ -11,9 +11,9 @@ A Home Assistant custom integration for Australian GoodWe accounts hosted on
 
 ## Features
 
-- Imports GoodWe power stations and inverters into Home Assistant.
+- Imports GoodWe SEMS+ power stations and inverters into Home Assistant.
 - Provides generation, consumption, grid, battery, energy, and inverter sensors
-  when those values are available from SEMS+.
+  when those values are available from SEMS+ Australia.
 - Provides controls for supported inverter charging settings.
 - Polls the SEMS+ cloud API once per minute by default.
 
@@ -31,18 +31,18 @@ custom repository:
 2. Select **Integrations**, open the menu, and choose **Custom repositories**.
 3. Enter `https://github.com/tgxn/goodwe-sems-home-assistant` and select the
    **Integration** category.
-4. Select **GoodWe SEMS (AU))**, download it, and restart Home Assistant.
+4. Select **GoodWe SEMS+ (AU))**, download it, and restart Home Assistant.
 
 ### Manual
 
-Copy `custom_components/sems` from this repository into the
+Copy `custom_components/sems_au` from this repository into the
 `custom_components` directory in your Home Assistant configuration, then
 restart Home Assistant.
 
 ## Configuration
 
 1. In Home Assistant, go to **Settings > Devices & services**.
-2. Select **Add integration** and search for **GoodWe SEMS Australia**.
+2. Select **Add integration** and search for **GoodWe SEMS+ Australia**.
 3. Sign in with the credentials used at
    [SEMS+ Australia](https://au-semsplus.goodwe.com/).
 
@@ -65,7 +65,7 @@ problem, then disable debug logging to download the log file. You can also add:
 logger:
   default: info
   logs:
-    custom_components.sems: debug
+    custom_components.sems_au: debug
 ```
 
 SEMS+ can respond slowly or temporarily reject requests. The integration will
@@ -91,9 +91,9 @@ Install the test dependencies and run the checks from the repository root:
 ```bash
 python -m pip install -r requirements.test.txt
 python -m pytest tests/ -v
-ruff check custom_components/
-ruff format --check custom_components/
-mypy custom_components/ --ignore-missing-imports --python-version 3.13
+ruff check custom_components/sems_au/
+ruff format --check custom_components/sems_au/
+mypy custom_components/sems_au/ --ignore-missing-imports --python-version 3.13
 ```
 
 ## Credits

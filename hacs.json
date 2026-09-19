@@ -1,6 +1,5 @@
 {
-  "name": "GoodWe SEMS (AU)",
-  "description": "Home Assistant integration for Australian GoodWe SEMS+ accounts",
+  "name": "GoodWe SEMS+ (AU)",
   "country": ["AU"],
   "content_in_root": false,
   "zip_release": true,
