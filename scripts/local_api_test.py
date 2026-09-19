@@ -118,6 +118,7 @@ async def _capture_mqtt(
                     tls_context=tls_context,
                     websocket_path=config.websocket_path,
                     websocket_headers={"Origin": config.websocket_origin},
+                    keepalive=60,
                 ) as client:
                     await client.subscribe(topic)
                     logging.info(
@@ -129,7 +130,10 @@ async def _capture_mqtt(
 
                     async def consume_messages() -> None:
                         nonlocal message_count
+                        logging.debug("Starting message consumption loop")
+                        message_received_time = asyncio.get_running_loop().time()
                         async for message in client.messages:
+                            message_received_time = asyncio.get_running_loop().time()
                             record = _capture_record(
                                 str(message.topic), bytes(message.payload)
                             )
@@ -156,6 +160,7 @@ async def _capture_mqtt(
                         async with asyncio.timeout_at(deadline):
                             await consume_messages()
             except TimeoutError:
+                logging.info("Deadline reached; stopping capture")
                 break
             except (aiomqtt.MqttError, ValueError) as err:
                 logging.warning(
@@ -170,6 +175,17 @@ async def _capture_mqtt(
                     await asyncio.sleep(min(_RECONNECT_DELAY, remaining))
                 else:
                     await asyncio.sleep(_RECONNECT_DELAY)
+            except Exception as err:
+                logging.error("Unexpected error in MQTT capture: %s", err, exc_info=True)
+                raise
+        
+        if message_count == 0:
+            logging.warning(
+                "No MQTT messages received. This usually means no data is currently being "
+                "published on the topic. The connection and subscription succeeded, but the "
+                "device may not be actively sending data at this moment. Try running again "
+                "or checking the device status via the REST API."
+            )
 
     return message_count
 

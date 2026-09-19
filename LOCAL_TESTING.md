@@ -13,6 +13,8 @@ The integration currently selects the Australian SEMS region by default.
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.local.txt
+
+# create local .env for creds if required
 cp .env.example .env
 ```
 
