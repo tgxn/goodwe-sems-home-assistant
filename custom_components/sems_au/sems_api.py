@@ -134,8 +134,7 @@ class SemsApi:
             # Always check for authorization errors, regardless of validate_code
             error_msg = json_response.get("msg", "Unknown error")
             is_auth_error = (
-                str(response_code) == "100002"
-                or "authorization" in error_msg.lower()
+                str(response_code) == "100002" or "authorization" in error_msg.lower()
             )
 
             # Validate response code if requested
