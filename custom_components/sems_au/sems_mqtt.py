@@ -281,13 +281,33 @@ class SemsMqttListener:
                 self._connection_state = (
                     "failed" if self._connection_failures >= 3 else "connecting"
                 )
-                _LOGGER.warning(
-                    "✗ SEMS MQTT connection failed (attempt %s/%s, state=%s): %s",
-                    self._connection_failures,
-                    _MAX_RECONNECT_DELAY,
-                    self._connection_state,
-                    err,
+                error_type = type(err).__name__
+                error_details = str(err)
+                broker_host = config.hostname if "config" in locals() else "unknown"
+                broker_port = config.port if "config" in locals() else 0
+                broker_path = (
+                    config.websocket_path if "config" in locals() else "unknown"
                 )
+                _LOGGER.debug(
+                    "SEMS MQTT connection attempt %d failed (state=%s, error_type=%s, broker=%s:%d%s): %s",
+                    self._connection_failures,
+                    self._connection_state,
+                    error_type,
+                    broker_host,
+                    broker_port,
+                    broker_path,
+                    error_details,
+                )
+                # Only log WARNING if we're in failed state (after 3+ attempts)
+                if self._connection_failures >= 3:
+                    _LOGGER.warning(
+                        "✗ SEMS MQTT connection failed after %d attempts (state=%s, error_type=%s, broker=%s:%d): Check network connectivity, MQTT broker status, and SEMS credentials. Will continue retrying in background.",
+                        self._connection_failures,
+                        self._connection_state,
+                        error_type,
+                        broker_host,
+                        broker_port,
+                    )
 
             if self._stop_event.is_set():
                 self._connection_state = "disconnected"
