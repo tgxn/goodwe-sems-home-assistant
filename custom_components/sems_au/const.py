@@ -112,6 +112,20 @@ _UUID_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 _SERIAL_PATTERN = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{12,20}$")
+_EMBEDDED_UUID_PATTERN = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
+
+def redact_text(text: str) -> str:
+    """Redact station/device UUIDs embedded within a free-form log message.
+
+    Unlike `redact_for_log`, this matches UUIDs anywhere in the string rather
+    than requiring the whole string to be a UUID. Intended for third-party
+    log lines (e.g. paho-mqtt's raw protocol trace) that embed a topic or
+    identifier inside a larger sentence.
+    """
+    return _EMBEDDED_UUID_PATTERN.sub("<station-id-redacted>", text)
 
 
 def _matches_sensitive_pattern(value: str) -> bool:
