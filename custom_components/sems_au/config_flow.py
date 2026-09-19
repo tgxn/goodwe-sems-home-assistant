@@ -74,7 +74,7 @@ async def validate_credentials(hass: HomeAssistant, data: dict[str, Any]) -> Sem
     return api
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for sems."""
 
     VERSION = 3
