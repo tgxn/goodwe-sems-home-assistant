@@ -510,7 +510,8 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
             mqtt_is_connected = False
             mqtt_connection_failures = 0
             if (
-                hasattr(self.config_entry, "runtime_data")
+                self.config_entry is not None
+                and hasattr(self.config_entry, "runtime_data")
                 and self.config_entry.runtime_data
             ):
                 mqtt_listener = self.config_entry.runtime_data.mqtt_listener
