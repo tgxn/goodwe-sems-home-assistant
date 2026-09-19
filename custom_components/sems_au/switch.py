@@ -21,7 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SemsCoordinator
 from .const import CONF_STATION_ID
-from .device import device_info_for_inverter
+from .device import device_info_for_station
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,8 +43,12 @@ class SemsSwitchBase(CoordinatorEntity[SemsCoordinator], SwitchEntity):
     ) -> None:
         super().__init__(coordinator)
         inverter_data = coordinator.data.inverters.get(serial_number, {})
-        self._attr_device_info = device_info_for_inverter(serial_number, inverter_data)
-        self._attr_unique_id = f"{serial_number}-{function_name}"
+        self._attr_device_info = device_info_for_station(
+            coordinator.data.station_id, coordinator.data.station_name, inverter_data
+        )
+        self._attr_unique_id = (
+            f"{coordinator.data.station_id}-{serial_number}-{function_name}"
+        )
         self._attr_name = name
         self.serial_number = serial_number
 

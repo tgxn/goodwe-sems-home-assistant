@@ -21,9 +21,9 @@ jobs:
         shell: "bash"
         run: |
           cd "${{ github.workspace }}/custom_components/sems_au"
-          zip sems-au.zip -r ./
+          zip sems_au.zip -r ./
 
       - name: "Upload the ZIP file to the release"
         uses: "softprops/action-gh-release@v2.0.8"
         with:
-          files: ${{ github.workspace }}/custom_components/sems_au/sems-au.zip
+          files: ${{ github.workspace }}/custom_components/sems_au/sems_au.zip

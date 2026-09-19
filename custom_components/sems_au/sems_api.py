@@ -11,16 +11,14 @@ import requests
 from homeassistant import exceptions
 from homeassistant.core import HomeAssistant
 
-from .const import redact_for_log, redact_value
+from .const import DEFAULT_SEMS_REGION, SEMS_REGIONS, redact_for_log, redact_value
 
 _LOGGER = logging.getLogger(__name__)
 
-NEW_LOGIN_URL = (
-    "https://au-semsplus.goodwe.com/web/sems/sems-user/api/v1/auth/cross-login"
-)
 _GetPowerStationIdByOwnerURLPart = "/PowerStation/GetPowerStationIdByOwner"
 _PowerStationURLPart = "/v3/PowerStation/GetMonitorDetailByPowerstationId"
 _PowerControlURLPart = "/PowerStation/SaveRemoteControlInverter"
+_MqttConfigURLPart = "/sems-plant/api/second-data/config"
 _RequestTimeout = 30  # seconds
 _RateLimitRetryAfterSeconds = 300
 
@@ -45,17 +43,24 @@ _NewSEMSPlusWebLoginHeaders = {
 }
 
 
-_NewLoginFallbackApi = "https://au-gateway.semsportal.com/web/sems"
-_PowerStationApiFallback = "https://au.semsportal.com/api"
-
 type LoginMode = Literal["new", "web"]
 
 
 class SemsApi:
     """Interface to the SEMS API."""
 
-    def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        username: str,
+        password: str,
+        region: str = DEFAULT_SEMS_REGION,
+    ) -> None:
         """Init dummy hub."""
+        try:
+            self._region = SEMS_REGIONS[region]
+        except KeyError as err:
+            raise ValueError(f"Unsupported SEMS region: {region}") from err
         self._hass = hass
         self._username = username
         self._password = password
@@ -220,10 +225,10 @@ class SemsApi:
         _LOGGER.debug(
             "SEMS - Rewriting API base from %s to fallback %s for %s",
             api_base,
-            _PowerStationApiFallback,
+            self._region.powerstation_api_url,
             url_part,
         )
-        return _PowerStationApiFallback
+        return self._region.powerstation_api_url
 
     def _get_authenticated_request_context(
         self,
@@ -245,7 +250,9 @@ class SemsApi:
                 renewToken,
             )
             if is_web:
-                self._web_token = self._get_new_login_token(self._username, self._password)
+                self._web_token = self._get_new_login_token(
+                    self._username, self._password
+                )
                 token = self._web_token
             else:
                 self._token = self.getLoginToken(self._username, self._password)
@@ -392,9 +399,7 @@ class SemsApi:
     ) -> dict[str, Any] | None:
         """Get a token from the SEMS+ login endpoint."""
         login_mode: LoginMode = "web"
-        operation_name = (
-            "SEMS+ Web login API call"
-        )
+        operation_name = "SEMS+ Web login API call"
         _LOGGER.debug("SEMS - Trying %s", operation_name)
         login_data = {
             "account": userName,
@@ -411,7 +416,7 @@ class SemsApi:
         }
 
         json_response = self._make_http_request(
-            NEW_LOGIN_URL,
+            self._region.login_url,
             headers,
             json_data=login_data,
             operation_name=operation_name,
@@ -421,7 +426,7 @@ class SemsApi:
             json_response,
             login_mode,
             operation_name,
-            _NewLoginFallbackApi,
+            self._region.gateway_api_url,
         )
 
     def getLoginToken(self, userName: str, password: str) -> dict[str, Any] | None:
@@ -429,7 +434,7 @@ class SemsApi:
         _LOGGER.debug(
             "SEMS+ authentication attempt: account=%s endpoint=%s",
             redact_value(userName),
-            NEW_LOGIN_URL,
+            self._region.login_url,
         )
         try:
             token = self._get_new_login_token(userName, password)
@@ -542,6 +547,22 @@ class SemsApi:
             operation_name="getData API call",
         )
         return result if isinstance(result, dict) else {}
+
+    def getMqttConfig(
+        self, renewToken: bool = False, maxTokenRetries: int = 2
+    ) -> dict[str, Any]:
+        """Get the short-lived MQTT-over-WebSocket connection configuration."""
+        result = self._make_api_call(
+            _MqttConfigURLPart,
+            method="GET",
+            renewToken=renewToken,
+            maxTokenRetries=maxTokenRetries,
+            operation_name="getMqttConfig API call",
+            is_web=True,
+        )
+        config = result if isinstance(result, dict) else {}
+        _LOGGER.debug("SEMS MQTT configuration: %s", redact_for_log(config))
+        return config
 
     def getEnergyStorageIntegratedCabinets(
         self,
