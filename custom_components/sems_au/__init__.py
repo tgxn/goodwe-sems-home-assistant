@@ -2,26 +2,32 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_SCAN_INTERVAL, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_REGION,
     CONF_STATION_ID,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SEMS_REGION,
     DOMAIN,
     GOODWE_SPELLING,
     PLATFORMS,
     redact_for_log,
 )
 from .sems_api import SemsApi, SemsRateLimitedError
+from .sems_mqtt import SemsMqttListener
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -34,6 +40,145 @@ _IMMEDIATE_CHARGING_FUNCTION_KEYS = {
     "bat_immediate_charge_power",
 }
 
+_NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _decimal_value(value: Any) -> Decimal | None:
+    """Return a Decimal from SEMS numeric strings, including values with units."""
+
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        match = _NUMBER_PATTERN.search(value)
+        if match is None:
+            return None
+        value = match.group(0)
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _int_value(value: Any) -> int | None:
+    """Return an int for SEMS status values."""
+
+    decimal_value = _decimal_value(value)
+    if decimal_value is None:
+        return None
+    return int(decimal_value)
+
+
+def _set_if_not_none(data: dict[str, Any], key: str, value: Any) -> None:
+    """Set a key only when SEMS supplied a usable value."""
+
+    if value is not None:
+        data[key] = value
+
+
+def _normalize_rest_powerflow(
+    data_result: dict[str, Any], kpi: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Normalize REST powerflow data to the station powerflow model."""
+
+    if not data_result.get("hasPowerflow"):
+        return None
+
+    raw_powerflow = data_result.get("powerflow")
+    if not isinstance(raw_powerflow, dict):
+        raw_powerflow = {}
+
+    powerflow: dict[str, Any] = {"source": "rest"}
+    for source_key, target_key in (
+        ("pv", "pv"),
+        ("load", "load"),
+        ("grid", "grid"),
+        (GOODWE_SPELLING.battery, "battery"),
+        ("genset", "genset"),
+    ):
+        _set_if_not_none(
+            powerflow, target_key, _decimal_value(raw_powerflow.get(source_key))
+        )
+
+    for source_key, target_key in (
+        ("pvStatus", "pvStatus"),
+        ("loadStatus", "loadStatus"),
+        ("gridStatus", "gridStatus"),
+        (GOODWE_SPELLING.batteryStatus, "batteryStatus"),
+    ):
+        _set_if_not_none(
+            powerflow, target_key, _int_value(raw_powerflow.get(source_key))
+        )
+
+    _set_if_not_none(powerflow, "soc", _decimal_value(raw_powerflow.get("soc")))
+    _set_if_not_none(
+        powerflow, "all_time_generation", _decimal_value(kpi.get("total_power"))
+    )
+
+    has_energy_statistics_charts = bool(
+        data_result.get(GOODWE_SPELLING.hasEnergyStatisticsCharts)
+    )
+    powerflow[GOODWE_SPELLING.hasEnergyStatisticsCharts] = has_energy_statistics_charts
+
+    if has_energy_statistics_charts:
+        charts = data_result.get(GOODWE_SPELLING.energyStatisticsCharts)
+        if not isinstance(charts, dict):
+            charts = {}
+        totals = data_result.get(GOODWE_SPELLING.energyStatisticsTotals)
+        if not isinstance(totals, dict):
+            totals = {}
+
+        for key, value in charts.items():
+            _set_if_not_none(powerflow, f"Charts_{key}", _decimal_value(value))
+        for key, value in totals.items():
+            _set_if_not_none(powerflow, f"Totals_{key}", _decimal_value(value))
+
+    return powerflow
+
+
+def _normalize_station_data(
+    data_result: dict[str, Any], kpi: dict[str, Any]
+) -> dict[str, Any]:
+    """Normalize station-level REST values."""
+
+    station: dict[str, Any] = {}
+    info = data_result.get("info")
+    if not isinstance(info, dict):
+        info = {}
+
+    for source_key, target_key in (
+        ("capacity", "rated_solar_capacity"),
+        ("battery_capacity", "rated_battery_capacity"),
+        ("longitude", "longitude"),
+        ("latitude", "latitude"),
+        ("time_span", "timezone_offset"),
+    ):
+        _set_if_not_none(station, target_key, _decimal_value(info.get(source_key)))
+
+    _set_if_not_none(station, "status", _int_value(info.get("status")))
+
+    for source_key, target_key in (
+        ("month_generation", "energy_this_month"),
+        ("pac", "current_output_power"),
+        ("total_power", "lifetime_solar_energy"),
+        ("day_income", "income_today"),
+        ("total_income", "income_total"),
+        ("yield_rate", "yield_rate"),
+    ):
+        _set_if_not_none(station, target_key, _decimal_value(kpi.get(source_key)))
+
+    environmental = data_result.get("hjgx")
+    if isinstance(environmental, dict):
+        for source_key, target_key in (
+            ("co2", "co2_avoided"),
+            ("tree", "trees_equivalent"),
+            ("coal", "coal_saved"),
+        ):
+            _set_if_not_none(
+                station, target_key, _decimal_value(environmental.get(source_key))
+            )
+
+    return station
+
 
 @dataclass(slots=True)
 class SemsRuntimeData:
@@ -41,6 +186,8 @@ class SemsRuntimeData:
 
     api: SemsApi
     coordinator: SemsDataUpdateCoordinator
+    mqtt_listener: SemsMqttListener
+    mqtt_task: asyncio.Task[None]
 
 
 type SemsConfigEntry = ConfigEntry[SemsRuntimeData]
@@ -51,10 +198,13 @@ class SemsData:
     """Runtime SEMS data returned by the coordinator."""
 
     inverters: dict[str, dict[str, Any]]
+    station: dict[str, Any] | None = None
     batteries: dict[str, dict[str, dict[str, Any]]] | None = None
     immediate_charging: dict[str, dict[str, Any]] | None = None
-    homekit: dict[str, Any] | None = None
+    powerflow: dict[str, Any] | None = None
     currency: str | None = None
+    station_id: str | None = None
+    station_name: str | None = None
 
 
 async def async_setup(hass: HomeAssistant, config: dict):
@@ -64,11 +214,29 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
 async def async_setup_entry(hass: HomeAssistant, entry: SemsConfigEntry) -> bool:
     """Set up sems from a config entry."""
-    sems_api = SemsApi(hass, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+    region = entry.data.get(CONF_REGION, DEFAULT_SEMS_REGION)
+    sems_api = SemsApi(
+        hass, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], region
+    )
     coordinator = SemsDataUpdateCoordinator(hass, sems_api, entry)
-    entry.runtime_data = SemsRuntimeData(api=sems_api, coordinator=coordinator)
-
     await coordinator.async_config_entry_first_refresh()
+
+    mqtt_listener = SemsMqttListener(
+        hass,
+        sems_api,
+        entry.data[CONF_STATION_ID],
+        region,
+        coordinator.async_apply_mqtt_powerflow_update,
+    )
+    mqtt_task = hass.async_create_background_task(
+        mqtt_listener.async_run(), f"{DOMAIN} live data listener"
+    )
+    entry.runtime_data = SemsRuntimeData(
+        api=sems_api,
+        coordinator=coordinator,
+        mqtt_listener=mqtt_listener,
+        mqtt_task=mqtt_task,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -76,25 +244,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: SemsConfigEntry) -> bool
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries."""
-    if entry.version > 2:
+    if entry.version > 3:
         _LOGGER.error("Cannot migrate entry version %s", entry.version)
         return False
 
+    data = dict(entry.data)
     if entry.version < 2:
         station_id = entry.data.get(CONF_STATION_ID)
         if entry.unique_id is None and isinstance(station_id, str) and station_id:
-            hass.config_entries.async_update_entry(
-                entry, version=2, unique_id=station_id
-            )
-        else:
-            hass.config_entries.async_update_entry(entry, version=2)
+            hass.config_entries.async_update_entry(entry, unique_id=station_id)
+
+    if entry.version < 3:
+        data.setdefault(CONF_REGION, DEFAULT_SEMS_REGION)
+        hass.config_entries.async_update_entry(entry, data=data, version=3)
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SemsConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+
+    entry.runtime_data.mqtt_listener.stop()
+    entry.runtime_data.mqtt_task.cancel()
+    try:
+        await asyncio.gather(entry.runtime_data.mqtt_task, return_exceptions=True)
+    except asyncio.CancelledError:
+        pass
+    return True
 
 
 class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
@@ -266,72 +444,59 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
                 )
                 inverters_by_sn[sn] = inverter_full
 
+            station_info = data_result.get("info")
+            station_name = None
+            if isinstance(station_info, dict):
+                station_name = station_info.get("stationname")
+                if not isinstance(station_name, str) or not station_name:
+                    station_name = None
+
+            for inverter_data in inverters_by_sn.values():
+                inverter_data["station_id"] = self.station_id
+                inverter_data["station_name"] = station_name
+
             # Add currency
             kpi = data_result.get("kpi")
             if not isinstance(kpi, dict):
                 kpi = {}
             currency = kpi.get("currency")
+            station = _normalize_station_data(data_result, kpi)
 
-            has_powerflow = bool(data_result.get("hasPowerflow"))
-            has_energy_statistics_charts = bool(
-                data_result.get(GOODWE_SPELLING.hasEnergyStatisticsCharts)
-            )
-
-            homekit: dict[str, Any] | None = None
-
-            if has_powerflow:
+            powerflow = _normalize_rest_powerflow(data_result, kpi)
+            if powerflow is not None:
                 _LOGGER.debug("Found powerflow data")
-                powerflow = data_result.get("powerflow")
-                if not isinstance(powerflow, dict):
-                    powerflow = {}
-
-                if has_energy_statistics_charts:
-                    charts = data_result.get(GOODWE_SPELLING.energyStatisticsCharts)
-                    if not isinstance(charts, dict):
-                        charts = {}
-                    totals = data_result.get(GOODWE_SPELLING.energyStatisticsTotals)
-                    if not isinstance(totals, dict):
-                        totals = {}
-
-                    powerflow = {
-                        **powerflow,
-                        **{f"Charts_{key}": val for key, val in charts.items()},
-                        **{f"Totals_{key}": val for key, val in totals.items()},
-                    }
-
-                # Add the flag so sensors can check if energy statistics are available
-                powerflow[GOODWE_SPELLING.hasEnergyStatisticsCharts] = (
-                    has_energy_statistics_charts
-                )
-
-                homekit_data = data_result.get(GOODWE_SPELLING.homeKit)
-                if not isinstance(homekit_data, dict):
-                    homekit_data = {}
-                powerflow["sn"] = homekit_data.get("sn")
-
-                # Goodwe 'Power Meter' (not HomeKit) doesn't have a sn
-                # Let's put something in, otherwise we can't see the data.
-                if powerflow["sn"] is None:
-                    powerflow["sn"] = "GW-HOMEKIT-NO-SERIAL"
-
-                # _LOGGER.debug("homeKit sn: %s", result["homKit"]["sn"])
-                # This seems more accurate than the Chart_sum
-                powerflow["all_time_generation"] = kpi.get("total_power")
-
-                homekit = powerflow
 
             data = SemsData(
                 inverters=inverters_by_sn,
+                station=station,
                 batteries=batteries,
-                homekit=homekit,
+                powerflow=powerflow,
                 currency=currency,
                 immediate_charging=immediate_charging,
+                station_id=self.station_id,
+                station_name=station_name,
             )
             _LOGGER.debug(
                 "Resulting data: %s",
                 redact_for_log(data),
             )
             return data
+
+    @callback
+    def async_apply_mqtt_powerflow_update(self, update: dict[str, Any]) -> None:
+        """Merge a live MQTT powerflow update into coordinator data."""
+
+        if self.data is None:
+            return
+
+        station_id = update.get("station_id")
+        if isinstance(station_id, str) and station_id != self.station_id:
+            _LOGGER.debug("Ignoring MQTT update for a different station")
+            return
+
+        powerflow = dict(self.data.powerflow or {})
+        powerflow.update(update)
+        self.async_set_updated_data(replace(self.data, powerflow=powerflow))
 
 
 # Type alias to make type inference working for pylance

@@ -3,12 +3,15 @@
 ## Raw API Response Structure
 
 ### Overview
+
 The SEMS API `getData()` endpoint returns a comprehensive JSON object with the following main sections:
 
 ## 1. INFO Section (Station-level metadata)
+
 Currently captured in `SemsData.info`:
+
 - `powerstation_id` - Power station unique ID
-- `stationname` - Station name  
+- `stationname` - Station name
 - `capacity` - Total capacity (6.6 kW in example)
 - `battery_capacity` - Battery capacity (16.6 kWh in example)
 - `status` - Station status (1 = online)
@@ -21,28 +24,30 @@ Currently captured in `SemsData.info`:
 ---
 
 ## 2. KPI Section (Key Performance Indicators)
+
 Available but may not be fully utilized:
 
-| Field | Type | Unit | Current Status |
-|-------|------|------|-----------------|
-| `pac` | float | W | **NOT mapped** - could be "Grid Power" |
-| `power` | float | W | **NOT mapped** - duplicate/similar to pac? |
-| `month_generation` | float | kWh | **NOT mapped** - "Monthly Generation" |
-| `day_income` | float | Currency | **MAPPED** as `iday` in inverter |
-| `total_income` | float | Currency | **MAPPED** as `itotal` in inverter |
-| `yield_rate` | float | ratio | **NOT mapped** - Performance/efficiency metric |
-| `total_power` | float | kWh | **NOT mapped** - "Total Power Generated" |
+| Field              | Type  | Unit     | Current Status                                     |
+| ------------------ | ----- | -------- | -------------------------------------------------- |
+| `pac`              | float | W        | **MAPPED** - Station Current Output Power          |
+| `power`            | float | W        | **NOT mapped** - duplicate/ambiguous display value |
+| `month_generation` | float | kWh      | **MAPPED** - Station Energy This Month             |
+| `day_income`       | float | Currency | **MAPPED** as `iday` in inverter                   |
+| `total_income`     | float | Currency | **MAPPED** as `itotal` in inverter                 |
+| `yield_rate`       | float | ratio    | **MAPPED** - Station Yield Rate                    |
+| `total_power`      | float | kWh      | **MAPPED** - Station Lifetime Solar Energy         |
 
-**Action**: Should add `month_generation`, `yield_rate`, and clarify `pac` vs inverter `pac`.
+**Action**: `power` remains intentionally unmapped until its meaning is confirmed separately from `month_generation`.
 
 ---
 
 ## 3. INVERTER Array (Per-inverter detailed data)
 
 ### 3.1 Basic Info (Already Mapped)
+
 ```
 ✓ sn - Serial number
-✓ name - Device name  
+✓ name - Device name
 ✓ type - Model type (e.g., "GW5K-EHA-G20")
 ✓ capacity - Rated power (kW)
 ✓ status - Status (1 = online, 0 = offline)
@@ -53,19 +58,22 @@ Available but may not be fully utilized:
 ```
 
 ### 3.2 PV Array Inputs (Already Mapped)
+
 ```
 ✓ vpv1, vpv2, vpv3, vpv4 - PV string voltages (V)
 ✓ ipv1, ipv2, ipv3, ipv4 - PV string currents (A)
 ```
 
 ### 3.3 AC Grid Outputs (Already Mapped)
+
 ```
 ✓ vac1, vac2, vac3 - AC grid voltages (V)
-✓ iac1, iac2, iac3 - AC grid currents (A)  
+✓ iac1, iac2, iac3 - AC grid currents (A)
 ✓ fac1, fac2, fac3 - Grid frequencies (Hz)
 ```
 
 ### 3.4 Battery Management (Already Mapped)
+
 ```
 ✓ vbattery1, ibattery1 - Battery voltage/current
 ✓ soc - State of Charge (%)
@@ -82,27 +90,32 @@ Available but may not be fully utilized:
   ✓ bms_discharge_i_max - Max discharge current (A)
 ```
 
-### 3.5 Load/Backup Output (NOT MAPPED)
+### 3.5 Load/Backup Output (Mapped)
+
 ```
-✗ vload - Backup output voltage (V)
-✗ iload - Backup output current (A)
-✗ pbackup - Backup output power (W)
+✓ vload - Backup output voltage (V)
+✓ iload - Backup output current (A)
+✓ pbackup - Backup output power (W)
 ```
 
-**Action**: Add load/backup voltage, current, power sensors.
+**Action**: Mapped as inverter backup output sensors.
 
 ### 3.6 Grid Meter (Partially Mapped)
+
 ```
 ✓ pmeter - Grid meter power (W) - if exists
 ✗ buy - Grid import power (W)
 ✗ sell/seller - Grid export power (W)
-✗ eTotalBuy - Total imported energy (kWh)
-✗ eDayBuy - Daily imported energy (kWh)
+✓ eTotalBuy - Total imported energy (kWh)
+✓ eDayBuy - Daily imported energy (kWh)
+✓ total_sell - Total exported energy (kWh)
+✓ total_buy - Total imported meter energy (kWh)
 ```
 
-**Action**: Add buy/sell grid energy tracking.
+**Action**: Instantaneous `buy`/`sell` still need meaning confirmation before exposing.
 
 ### 3.7 Battery Energy (Already Mapped)
+
 ```
 ✓ eChargeDay - Daily battery charge (kWh)
 ✓ eDischargeDay - Daily battery discharge (kWh)
@@ -110,30 +123,34 @@ Available but may not be fully utilized:
 ✓ eBatteryDischarge - Total battery discharge (kWh)
 ```
 
-### 3.8 Energy Statistics (NOT MAPPED) - IMPORTANT FOR HA ENERGY
+### 3.8 Energy Statistics (Partially Mapped) - IMPORTANT FOR HA ENERGY
+
 ```
-✗ eTotalBuy - Total energy from grid (kWh)
-✗ eDayBuy - Today's energy from grid (kWh)
-✗ total_sell - Total sold to grid (kWh)
-✗ total_buy - Total bought from grid (kWh)
+✓ eTotalBuy - Total energy from grid (kWh)
+✓ eDayBuy - Today's energy from grid (kWh)
+✓ total_sell - Total sold to grid (kWh)
+✓ total_buy - Total bought from grid (kWh)
 ✗ yesterday_buy_total - Yesterday's import
 ✗ yesterday_seller_total - Yesterday's export
 ```
 
-**Action**: Critical for Home Assistant Energy dashboard.
+**Action**: Yesterday-only counters remain unmapped because HA energy dashboards normally consume current daily/total sensors instead.
 
 ### 3.9 Temperature & Other Diagnostics (Partially Mapped)
+
 ```
 ✓ tempperature - Inverter temperature (°C)
 ✓ firmwareversion - Firmware version
 ✓ bmssoftwareversion - BMS firmware version
-✗ pv_power - Total PV power (W)
-✗ reactive_power - Reactive power (VAR)
-✗ pf - Power factor
+✓ pv_power - Total PV power (W)
+✓ reactive_power - Reactive power (var)
+✓ pf - Power factor
 ```
 
 ### 3.10 invert_full Nested Object (Extensive Details)
+
 This contains a full copy of inverter data with some additional fields:
+
 ```
 ✗ grid_conn_status - Grid connection status string
 ✗ micro_grid_flag - Has microgrid
@@ -145,43 +162,44 @@ This contains a full copy of inverter data with some additional fields:
 
 ---
 
-## 4. POWERFLOW Section (Live Power Flow) - NOT MAPPED
+## 4. POWERFLOW Section (Live Power Flow) - Mapped
+
 Critical for real-time energy display:
 
 ```
-✗ pv - PV output power ("0(W)" - formatted string)
-✗ bettery - Battery power ("772.6(W)")
-✗ load - Load power ("772.6(W)")
-✗ grid - Grid power ("0(W)")
-✗ soc - Battery state of charge (44)
-✗ genset - Genset power (if available)
-✗ pvStatus - PV connection status
-✗ betteryStatus - Battery status (-1, 0, 1)
-✗ gridStatus - Grid status (1 = connected)
+✓ pv - PV output power (formatted string parsed to W)
+✓ bettery - Battery power (formatted string parsed to W)
+✓ load - Load power (formatted string parsed to W)
+✓ grid - Grid power (formatted string parsed to W)
+✓ soc - Battery state of charge (%)
+✓ genset - Genset power (if available)
+✓ loadStatus/gridStatus/betteryStatus - used to sign flow values
 ```
 
-**Action**: These are formatted strings but contain useful live data. Could parse and use.
+**Action**: Mapped as station powerflow sensors.
 
 ---
 
-## 5. ENERGY STATISTICS CHARTS (NOT MAPPED)
+## 5. ENERGY STATISTICS CHARTS (Mapped)
+
 Important for Home Assistant Energy integration:
 
 ```
-✗ energeStatisticsCharts.buy - Daily grid import
-✗ energeStatisticsCharts.sell - Daily grid export
-✗ energeStatisticsCharts.selfUseOfPv - PV self-consumption
-✗ energeStatisticsCharts.charge - Battery charge today
-✗ energeStatisticsCharts.disCharge - Battery discharge today
-✗ energeStatisticsCharts.selfUseRate - % self-consumed
-✗ energeStatisticsCharts.contributingRate - % grid contribution
+✓ energeStatisticsCharts.buy - Daily grid import
+✓ energeStatisticsCharts.sell - Daily grid export
+✓ energeStatisticsCharts.selfUseOfPv - PV self-consumption
+✓ energeStatisticsCharts.charge - Battery charge today
+✓ energeStatisticsCharts.disCharge - Battery discharge today
+✓ energeStatisticsCharts.selfUseRate - % self-consumed
+✓ energeStatisticsCharts.contributingRate - % self sufficiency
 ```
 
-**Action**: Critical for HA Energy dashboard. These are the daily statistics.
+**Action**: Daily and total statistics are mapped as station powerflow energy/rate sensors.
 
 ---
 
-## 6. HOMEKIT/POWERFLOW Object (Live Dashboard Data)
+## 6. Station Powerflow Object (Live Dashboard Data)
+
 Already partially mapped via powerflow sensors.
 
 ---
@@ -189,20 +207,23 @@ Already partially mapped via powerflow sensors.
 ## Priority Actions for Complete HA Energy Support
 
 ### HIGH PRIORITY (Required for Energy Dashboard)
-1. ✗ **Grid Buy/Sell Energy** - `eTotalBuy`, `total_sell` from inverter
-2. ✗ **Daily Grid Buy/Sell** - `eDayBuy` from inverter  
-3. ✗ **KPI: Monthly Generation** - `month_generation` from kpi
-4. ✗ **Energy Statistics** - `energeStatisticsCharts` daily breakdown
+
+1. ✓ **Grid Buy/Sell Energy** - `eTotalBuy`, `total_sell` from inverter
+2. ✓ **Daily Grid Buy/Sell** - `eDayBuy` from inverter
+3. ✓ **KPI: Monthly Generation** - `month_generation` from kpi
+4. ✓ **Energy Statistics** - `energeStatisticsCharts` daily breakdown
 
 ### MEDIUM PRIORITY (Useful for Monitoring)
-1. ✗ **Load Output** - `vload`, `iload`, `pbackup` (backup output)
+
+1. ✓ **Load Output** - `vload`, `iload`, `pbackup` (backup output)
 2. ✗ **Grid Power Components** - Per-phase `mtActivepowerR/S/T`
-3. ✗ **Power Factor** - `pf` from invert_full
-4. ✗ **Battery Charge/Discharge Today** - separate from etotal
-5. ✗ **Reactive Power** - `reactive_power`
+3. ✓ **Power Factor** - `pf` from invert_full
+4. ✓ **Battery Charge/Discharge Today** - separate from etotal
+5. ✓ **Reactive Power** - `reactive_power`
 
 ### LOW PRIORITY (Diagnostics)
-1. ✗ **Yield Rate** - Efficiency metric
+
+1. ✓ **Yield Rate** - Efficiency metric
 2. ✗ **Grid Connection Status** - Text status string
 3. ✗ **Microgrid Status** - If applicable
 
@@ -210,25 +231,26 @@ Already partially mapped via powerflow sensors.
 
 ## Summary Statistics
 
-| Category | Mapped | Total | Coverage |
-|----------|--------|-------|----------|
-| Inverter Basics | 8 | 8 | 100% |
-| PV Inputs | 8 | 8 | 100% |
-| AC Grid | 9 | 9 | 100% |
-| Battery | 14 | 14 | 100% |
-| Load/Backup | 0 | 3 | **0%** |
-| Grid Meter | 1 | 5 | 20% |
-| Battery Energy | 4 | 4 | 100% |
-| Grid Buy/Sell | 0 | 4 | **0%** |
-| KPI | 2 | 5 | 40% |
-| Energy Charts | 0 | 7 | **0%** |
-| **TOTAL** | **46** | **67** | **69%** |
+| Category        | Mapped | Total  | Coverage |
+| --------------- | ------ | ------ | -------- |
+| Inverter Basics | 8      | 8      | 100%     |
+| PV Inputs       | 8      | 8      | 100%     |
+| AC Grid         | 9      | 9      | 100%     |
+| Battery         | 14     | 14     | 100%     |
+| Load/Backup     | 0      | 3      | **0%**   |
+| Grid Meter      | 1      | 5      | 20%      |
+| Battery Energy  | 4      | 4      | 100%     |
+| Grid Buy/Sell   | 0      | 4      | **0%**   |
+| KPI             | 2      | 5      | 40%      |
+| Energy Charts   | 0      | 7      | **0%**   |
+| **TOTAL**       | **46** | **67** | **69%**  |
 
 ---
 
 ## Recommendation
 
 To achieve 100% coverage for Home Assistant Energy integration, prioritize:
+
 1. Add grid buy/sell energy sensors (high impact)
 2. Add daily energy statistics from energeStatisticsCharts
 3. Add load/backup output sensors

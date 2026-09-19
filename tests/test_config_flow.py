@@ -12,7 +12,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.sems_au import async_migrate_entry
 from custom_components.sems_au.config_flow import _normalize_station_ids
-from custom_components.sems_au.const import CONF_STATION_ID, DOMAIN
+from custom_components.sems_au.const import (
+    CONF_REGION,
+    CONF_STATION_ID,
+    DEFAULT_SEMS_REGION,
+    DOMAIN,
+)
 
 MOCK_USERNAME = "test@example.com"
 MOCK_PASSWORD = "test_password"
@@ -110,9 +115,10 @@ async def test_single_station_creates_entry_directly(
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == f"Inverter {MOCK_STATION_ID_1}"
+    assert result["title"] == f"Station {MOCK_STATION_ID_1}"
     assert result["data"][CONF_STATION_ID] == MOCK_STATION_ID_1
     assert result["data"][CONF_USERNAME] == MOCK_USERNAME
+    assert result["data"][CONF_REGION] == DEFAULT_SEMS_REGION
 
 
 async def test_multiple_stations_auto_creates_all_entries(
@@ -142,12 +148,14 @@ async def test_multiple_stations_auto_creates_all_entries(
 
     # First station is created immediately, no selection step shown
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["title"] == f"Station {MOCK_STATION_ID_1}"
     assert result["data"][CONF_STATION_ID] == MOCK_STATION_ID_1
 
     await hass.async_block_till_done()
     entries = hass.config_entries.async_entries(DOMAIN)
     station_ids = {entry.data[CONF_STATION_ID] for entry in entries}
     assert station_ids == {MOCK_STATION_ID_1, MOCK_STATION_ID_2}
+    assert {entry.data[CONF_REGION] for entry in entries} == {DEFAULT_SEMS_REGION}
     unique_ids = {entry.unique_id for entry in entries}
     assert unique_ids == {MOCK_STATION_ID_1, MOCK_STATION_ID_2}
 
@@ -234,5 +242,6 @@ async def test_migrate_entry_sets_unique_id_from_station_id(
     entry.add_to_hass(hass)
 
     assert await async_migrate_entry(hass, entry)
-    assert entry.version == 2
+    assert entry.version == 3
     assert entry.unique_id == MOCK_STATION_ID_1
+    assert entry.data[CONF_REGION] == DEFAULT_SEMS_REGION

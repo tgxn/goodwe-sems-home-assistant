@@ -388,11 +388,8 @@ MOCK_GET_DATA_RESULT_MINIMAL = {
     "hasEnergeStatisticsCharts": False,
 }
 
-# Coordinator-compatible getData() result that includes HomeKit/powerflow data.
-#
-# The coordinator will detect `hasPowerflow=True` and expose a pseudo-inverter
-# under `data.inverters["homeKit"]`.
-MOCK_HOMEKIT_GET_DATA = {
+# Coordinator-compatible getData() result that includes station powerflow data.
+MOCK_POWERFLOW_GET_DATA = {
     "inverter": [
         {
             "invert_full": {
@@ -441,8 +438,8 @@ MOCK_GET_DATA_ACTUAL_JSON: dict[str, Any] = _load_json_fixture(
     "tests/test-data/20260110_singleInverter_getData.json"
 )
 
-MOCK_GET_DATA_HOMEKIT_ACTUAL_JSON: dict[str, Any] = _load_json_fixture(
-    "tests/test-data/20250623_homekit_getData.json"
+MOCK_GET_DATA_POWERFLOW_ACTUAL_JSON: dict[str, Any] = _load_json_fixture(
+    "tests/test-data/20250623_powerflow_getData.json"
 )
 
 # Anonymized inverter serial number for testing

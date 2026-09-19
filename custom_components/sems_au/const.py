@@ -14,8 +14,32 @@ DOMAIN = "sems-au"
 PLATFORMS = ["number", "sensor", "switch"]
 
 CONF_STATION_ID = "powerstation_id"
+CONF_REGION = "region"
 
 DEFAULT_SCAN_INTERVAL = 60  # timedelta(seconds=60)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SemsRegion:
+    """SEMS endpoints for a supported region."""
+
+    login_url: str
+    gateway_api_url: str
+    powerstation_api_url: str
+    mqtt_broker_url: str
+    web_origin: str
+
+
+SEMS_REGIONS = {
+    "AU": SemsRegion(
+        login_url="https://au-semsplus.goodwe.com/web/sems/sems-user/api/v1/auth/cross-login",
+        gateway_api_url="https://au-gateway.semsportal.com/web/sems",
+        powerstation_api_url="https://au.semsportal.com/api",
+        mqtt_broker_url="wss://netty-wss-au.iot.goodwe-power.com:8885/mqtt",
+        web_origin="https://au-semsplus.goodwe.com",
+    ),
+}
+DEFAULT_SEMS_REGION = "AU"
 
 AC_EMPTY = 6553.5
 AC_CURRENT_EMPTY = 6553.5
@@ -30,7 +54,6 @@ class GOODWE_SPELLING:
 
     battery = "bettery"
     batteryStatus = "betteryStatus"
-    homeKit = "homKit"
     temperature = "tempperature"
     hasEnergyStatisticsCharts = "hasEnergeStatisticsCharts"
     energyStatisticsCharts = "energeStatisticsCharts"
@@ -69,6 +92,8 @@ _SENSITIVE_LOG_KEYS = {
     "account",
     "pwd",
     "password",
+    "username",
+    "clientid",
     "token",
     "uid",
     "sn",

@@ -7,16 +7,19 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from .const import DOMAIN
 
 
-def device_info_for_inverter(
-    serial_number: str, inverter_data: dict[str, Any]
+def device_info_for_station(
+    station_id: str | None,
+    station_name: str | None,
+    inverter_data: dict[str, Any] | None = None,
 ) -> DeviceInfo:
-    """Build device info for an inverter.
+    """Build device info for the station feed."""
 
-    This is shared across platforms (sensor, switch, etc.) so entities for the
-    same inverter are grouped under the same device and show a consistent name.
-    """
+    inverter_data = inverter_data or {}
+    identifier = station_id or inverter_data.get("powerstation_id") or "station"
+    name = station_name or inverter_data.get("station_name") or "SEMS Station"
 
-    name = inverter_data.get("name") or serial_number
+    if not isinstance(name, str) or not name.strip():
+        name = "SEMS Station"
 
     firmware_version = inverter_data.get("firmwareversion")
     if firmware_version in (None, ""):
@@ -27,15 +30,14 @@ def device_info_for_inverter(
     # NOTE: We intentionally keep fallbacks here because not every SEMS payload
     # is guaranteed to contain `model_type`, `firmwareversion`, etc.
     return DeviceInfo(
-        identifiers={(DOMAIN, serial_number)},
-        name=f"Inverter {name}",
+        identifiers={(DOMAIN, str(identifier))},
+        name=name,
         manufacturer="GoodWe",
         model=inverter_data.get("model_type", "unknown"),
         sw_version=sw_version,
         configuration_url=(
-            f"https://semsportal.com/PowerStation/PowerStatusSnMin/"
-            f"{inverter_data.get('powerstation_id')}"
-            if inverter_data.get("powerstation_id")
+            f"https://semsportal.com/PowerStation/PowerStatusSnMin/{identifier}"
+            if identifier
             else None
         ),
     )

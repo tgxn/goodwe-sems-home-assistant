@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SemsConfigEntry, SemsCoordinator
 from .const import CONF_STATION_ID
-from .device import device_info_for_inverter
+from .device import device_info_for_station
 
 type SetBatteryValueMethod = Callable[[str, str, str, int, str, str], None]
 
@@ -35,8 +35,10 @@ class SemsBatteryNumber(CoordinatorEntity[SemsCoordinator], NumberEntity):
     ) -> None:
         super().__init__(coordinator)
         inverter_data = coordinator.data.inverters.get(serial_number, {})
-        self._attr_device_info = device_info_for_inverter(serial_number, inverter_data)
-        self._attr_unique_id = f"{serial_number}-{battery_id}-{function_name}"
+        self._attr_device_info = device_info_for_station(
+            coordinator.data.station_id, coordinator.data.station_name, inverter_data
+        )
+        self._attr_unique_id = f"{coordinator.data.station_id}-{serial_number}-{battery_id}-{function_name}"
         self._attr_name = f"Battery {battery_name} {name}"
         self.plant_id = plant_id
         self.serial_number = serial_number

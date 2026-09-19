@@ -6,13 +6,18 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from custom_components.sems_au.const import redact_for_log
+from custom_components.sems_au.const import (
+    DEFAULT_SEMS_REGION,
+    SEMS_REGIONS,
+    redact_for_log,
+)
 from custom_components.sems_au.sems_api import (
-    NEW_LOGIN_URL,
     OutOfRetries,
     SemsApi,
     SemsRateLimitedError,
 )
+
+NEW_LOGIN_URL = SEMS_REGIONS[DEFAULT_SEMS_REGION].login_url
 
 # Test data constants - anonymized for privacy
 MOCK_INVERTER_SN = "GW0000SN000TEST1"
@@ -169,6 +174,27 @@ class TestSemsApi:
 
             assert result is None
             mock_new.assert_called_once_with("test_user", "test_pass")
+
+    @patch.object(SemsApi, "_make_api_call")
+    def test_get_mqtt_config(self, mock_api_call):
+        """Test fetching MQTT configuration from the SEMS+ plant API."""
+        mqtt_config = {
+            "brokerUrl": "wss://mqtt.example.com/mqtt",
+            "clientId": "client-id",
+            "userName": "mqtt-user",
+            "password": "mqtt-password",
+        }
+        mock_api_call.return_value = mqtt_config
+
+        assert self.api.getMqttConfig() == mqtt_config
+        mock_api_call.assert_called_once_with(
+            "/sems-plant/api/second-data/config",
+            method="GET",
+            renewToken=False,
+            maxTokenRetries=2,
+            operation_name="getMqttConfig API call",
+            is_web=True,
+        )
 
     def test_get_login_token_rate_limit_backoff(self):
         """Test rate-limit handling is propagated for coordinator retry scheduling."""
@@ -962,7 +988,9 @@ class TestSemsApi:
         }
         requests_mock.post(NEW_LOGIN_URL, json=login_response)
 
-        endpoint = "https://au.semsportal.com/api/PowerStation/SaveRemoteControlInverter"
+        endpoint = (
+            "https://au.semsportal.com/api/PowerStation/SaveRemoteControlInverter"
+        )
         requests_mock.post(endpoint, json={"status": "success"}, status_code=200)
 
         self.api.change_status(MOCK_INVERTER_SN, 1)
