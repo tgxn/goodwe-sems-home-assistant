@@ -40,4 +40,4 @@ def test_device_info_uses_station_name() -> None:
     )
 
     assert device_info["name"] == "Test Solar Farm"
-    assert device_info["identifiers"] == {("sems-au", "station-123")}
+    assert device_info["identifiers"] == {("sems_au", "station-123")}

@@ -103,7 +103,7 @@ async def _setup_entry(
 
 def _entity_id(hass: HomeAssistant, platform: Platform, key: str) -> str:
     entity_id = er.async_get(hass).async_get_entity_id(
-        platform, DOMAIN, f"{INVERTER_SERIAL}-{BATTERY_ID}-{key}"
+        platform, DOMAIN, f"{POWER_STATION_ID}-{INVERTER_SERIAL}-{BATTERY_ID}-{key}"
     )
     assert entity_id is not None
     return entity_id
@@ -158,7 +158,7 @@ async def test_entities_require_supported_functions(hass: HomeAssistant) -> None
     ):
         assert (
             ent_reg.async_get_entity_id(
-                platform, DOMAIN, f"{INVERTER_SERIAL}-{BATTERY_ID}-{key}"
+                platform, DOMAIN, f"{POWER_STATION_ID}-{INVERTER_SERIAL}-{BATTERY_ID}-{key}"
             )
             is None
         )
@@ -194,7 +194,7 @@ async def test_entities_are_not_added_after_discovery(hass: HomeAssistant) -> No
         er.async_get(hass).async_get_entity_id(
             Platform.NUMBER,
             DOMAIN,
-            f"{INVERTER_SERIAL}-{BATTERY_ID}-end_charge_soc",
+            f"{POWER_STATION_ID}-{INVERTER_SERIAL}-{BATTERY_ID}-end_charge_soc",
         )
         is None
     )
@@ -210,7 +210,7 @@ async def test_inverter_switch_without_battery(hass: HomeAssistant) -> None:
     )
 
     entity_id = er.async_get(hass).async_get_entity_id(
-        Platform.SWITCH, DOMAIN, f"{INVERTER_SERIAL}-switch"
+        Platform.SWITCH, DOMAIN, f"{POWER_STATION_ID}-{INVERTER_SERIAL}-switch"
     )
     assert entity_id is not None
     assert hass.states.get(entity_id).state == "on"
