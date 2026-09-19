@@ -355,8 +355,8 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
                     battery_general_functions[sn][bat_code] = {}
 
         batteries: dict[str, dict[str, dict[str, Any]]] = {}
-        for sn, bats in battery_general_functions.items():
-            for bat_id, bat in bats.items():
+        for sn, bat_dict in battery_general_functions.items():
+            for bat_id, bat in bat_dict.items():
                 if not isinstance(bat_id, str):
                     continue
                 for child in bat.get("functionMenus", {}).get("children", []):
