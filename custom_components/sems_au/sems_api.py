@@ -141,8 +141,8 @@ class SemsApi:
             if validate_code:
                 if response_code not in _SuccessCodes:
                     if is_auth_error:
-                        _LOGGER.warning(
-                            "%s - Authorization failed (code: %s): %s. Will retry with fresh token.",
+                        _LOGGER.debug(
+                            "%s - Authorization expired (code: %s): %s. Will retry with fresh token.",
                             operation_name,
                             response_code,
                             error_msg,
@@ -157,8 +157,8 @@ class SemsApi:
                     return None
             elif is_auth_error:
                 # Even if not validating codes, we must retry on auth errors
-                _LOGGER.warning(
-                    "%s - Authorization failed (code: %s): %s. Will retry with fresh token.",
+                _LOGGER.debug(
+                    "%s - Authorization expired (code: %s): %s. Will retry with fresh token.",
                     operation_name,
                     response_code,
                     error_msg,
