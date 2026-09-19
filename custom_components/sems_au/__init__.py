@@ -205,6 +205,11 @@ class SemsData:
     currency: str | None = None
     station_id: str | None = None
     station_name: str | None = None
+    mqtt_connection_state: str = (
+        "disconnected"  # Connection state: connected, connecting, disconnected, failed
+    )
+    mqtt_is_connected: bool = False  # Whether MQTT is currently connected
+    mqtt_connection_failures: int = 0  # Number of failed connection attempts
 
 
 async def async_setup(hass: HomeAssistant, config: dict):
@@ -500,6 +505,19 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
             if powerflow is not None:
                 _LOGGER.debug("Found powerflow data")
 
+            # Get MQTT connection status from the runtime data
+            mqtt_connection_state = "disconnected"
+            mqtt_is_connected = False
+            mqtt_connection_failures = 0
+            if (
+                hasattr(self.config_entry, "runtime_data")
+                and self.config_entry.runtime_data
+            ):
+                mqtt_listener = self.config_entry.runtime_data.mqtt_listener
+                mqtt_connection_state = mqtt_listener.connection_state
+                mqtt_is_connected = mqtt_listener.is_connected
+                mqtt_connection_failures = mqtt_listener.connection_failures
+
             data = SemsData(
                 inverters=inverters_by_sn,
                 station=station,
@@ -509,6 +527,9 @@ class SemsDataUpdateCoordinator(DataUpdateCoordinator[SemsData]):
                 immediate_charging=immediate_charging,
                 station_id=self.station_id,
                 station_name=station_name,
+                mqtt_connection_state=mqtt_connection_state,
+                mqtt_is_connected=mqtt_is_connected,
+                mqtt_connection_failures=mqtt_connection_failures,
             )
             _LOGGER.debug(
                 "Resulting data: %s",

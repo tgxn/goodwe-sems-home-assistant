@@ -198,6 +198,11 @@ class SemsMqttListener:
         self._message_handler = message_handler
         self._stop_event = asyncio.Event()
         self._connection_failures = 0
+        self._is_connected = False
+        self._last_update_time: str | None = None
+        self._connection_state = (
+            "disconnected"  # disconnected, connecting, connected, failed
+        )
 
     def _get_backoff_delay(self, failures: int) -> int:
         """Return an exponential backoff delay capped at the maximum retry window."""
@@ -206,10 +211,33 @@ class SemsMqttListener:
         delay = _RECONNECT_DELAY * (2 ** min(failures, 4))
         return min(delay, _MAX_RECONNECT_DELAY)
 
+    @property
+    def is_connected(self) -> bool:
+        """Return whether the MQTT connection is currently active."""
+        return self._is_connected
+
+    @property
+    def connection_state(self) -> str:
+        """Return the current connection state."""
+        return self._connection_state
+
+    @property
+    def connection_failures(self) -> int:
+        """Return the number of connection failures."""
+        return self._connection_failures
+
+    @property
+    def last_update_time(self) -> str | None:
+        """Return the timestamp of the last successful MQTT message."""
+        return self._last_update_time
+
     async def async_run(self) -> None:
         """Connect and listen until stopped or cancelled."""
         while not self._stop_event.is_set():
             try:
+                self._connection_state = "connecting"
+                _LOGGER.debug("Attempting to connect to SEMS MQTT broker...")
+
                 config_data = await self._hass.async_add_executor_job(
                     self._api.getMqttConfig
                 )
@@ -234,9 +262,11 @@ class SemsMqttListener:
                     websocket_headers={"Origin": config.websocket_origin},
                 ) as client:
                     self._connection_failures = 0
+                    self._is_connected = True
+                    self._connection_state = "connected"
                     await client.subscribe(self._topic)
-                    _LOGGER.debug(
-                        "Connected to SEMS live data and subscribed to %s",
+                    _LOGGER.info(
+                        "✓ Connected to SEMS live data (WebSocket MQTT) and subscribed to %s",
                         redact_for_log(self._topic),
                     )
                     async for message in client.messages:
@@ -247,17 +277,29 @@ class SemsMqttListener:
                 raise
             except (aiomqtt.MqttError, UnicodeDecodeError, ValueError) as err:
                 self._connection_failures += 1
-                _LOGGER.debug(
-                    "SEMS live data connection failed (%s/%s): %s",
+                self._is_connected = False
+                self._connection_state = (
+                    "failed" if self._connection_failures >= 3 else "connecting"
+                )
+                _LOGGER.warning(
+                    "✗ SEMS MQTT connection failed (attempt %s/%s, state=%s): %s",
                     self._connection_failures,
                     _MAX_RECONNECT_DELAY,
+                    self._connection_state,
                     err,
                 )
 
             if self._stop_event.is_set():
+                self._connection_state = "disconnected"
+                self._is_connected = False
                 break
 
             delay = self._get_backoff_delay(self._connection_failures)
+            _LOGGER.debug(
+                "Reconnecting to SEMS MQTT in %d seconds (failure count: %d)...",
+                delay,
+                self._connection_failures,
+            )
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
             except TimeoutError:
@@ -265,6 +307,9 @@ class SemsMqttListener:
 
     def stop(self) -> None:
         """Request that the listener stop."""
+        self._is_connected = False
+        self._connection_state = "disconnected"
+        _LOGGER.debug("Requesting SEMS MQTT listener to stop...")
         self._stop_event.set()
 
     def _handle_message(self, topic: str, payload: bytes) -> None:
@@ -287,4 +332,7 @@ class SemsMqttListener:
 
         normalized = normalize_mqtt_powerflow_payload(decoded)
         if normalized is not None and self._message_handler is not None:
+            # Update the last update time from the message
+            if isinstance(normalized, dict):
+                self._last_update_time = normalized.get("last_live_update")
             self._message_handler(normalized)

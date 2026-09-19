@@ -1049,6 +1049,32 @@ def sensor_options_for_data(data: SemsData) -> list[SemsSensorType]:
                         custom_value_handler=_percentage_handler,
                     ),
                 ]
+
+    # Add MQTT connection status sensors (debug/diagnostic)
+    mqtt_prefix = f"{station_prefix}-mqtt"
+    sensors += [
+        SemsStationSensorType(
+            device_info=station_device_info,
+            unique_id=f"{mqtt_prefix}-connection-state",
+            value_path=["mqtt_connection_state"],
+            name="MQTT Connection State",
+        ),
+        SemsStationSensorType(
+            device_info=station_device_info,
+            unique_id=f"{mqtt_prefix}-is-connected",
+            value_path=["mqtt_is_connected"],
+            name="MQTT Connected",
+        ),
+        SemsStationSensorType(
+            device_info=station_device_info,
+            unique_id=f"{mqtt_prefix}-connection-failures",
+            value_path=["mqtt_connection_failures"],
+            name="MQTT Connection Failures",
+            native_unit_of_measurement="attempts",
+            state_class=SensorStateClass.MEASUREMENT,
+        ),
+    ]
+
     return sensors
 
 
