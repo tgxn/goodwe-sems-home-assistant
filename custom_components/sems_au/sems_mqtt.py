@@ -283,9 +283,11 @@ class SemsMqttListener:
                 )
                 error_type = type(err).__name__
                 error_details = str(err)
-                broker_host = config.hostname if 'config' in locals() else "unknown"
-                broker_port = config.port if 'config' in locals() else 0
-                broker_path = config.websocket_path if 'config' in locals() else "unknown"
+                broker_host = config.hostname if "config" in locals() else "unknown"
+                broker_port = config.port if "config" in locals() else 0
+                broker_path = (
+                    config.websocket_path if "config" in locals() else "unknown"
+                )
                 _LOGGER.debug(
                     "SEMS MQTT connection attempt %d failed (state=%s, error_type=%s, broker=%s:%d%s): %s",
                     self._connection_failures,
