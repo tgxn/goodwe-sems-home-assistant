@@ -131,15 +131,16 @@ class SemsApi:
                     ),
                 )
 
+            # Always check for authorization errors, regardless of validate_code
+            error_msg = json_response.get("msg", "Unknown error")
+            is_auth_error = (
+                str(response_code) == "100002"
+                or "authorization" in error_msg.lower()
+            )
+
             # Validate response code if requested
             if validate_code:
                 if response_code not in _SuccessCodes:
-                    error_msg = json_response.get("msg", "Unknown error")
-                    # Detect authorization-related errors that need token refresh
-                    is_auth_error = (
-                        str(response_code) == "100002"
-                        or "authorization" in error_msg.lower()
-                    )
                     if is_auth_error:
                         _LOGGER.warning(
                             "%s - Authorization failed (code: %s): %s. Will retry with fresh token.",
@@ -155,6 +156,15 @@ class SemsApi:
                             error_msg,
                         )
                     return None
+            elif is_auth_error:
+                # Even if not validating codes, we must retry on auth errors
+                _LOGGER.warning(
+                    "%s - Authorization failed (code: %s): %s. Will retry with fresh token.",
+                    operation_name,
+                    response_code,
+                    error_msg,
+                )
+                return None
 
             return json_response
 
